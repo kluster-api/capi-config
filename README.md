@@ -1,1 +1,1 @@
-# capi-net-configurator
+# capi-netcfg

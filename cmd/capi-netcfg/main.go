@@ -17,7 +17,7 @@ limitations under the License.
 package main
 
 import (
-	"go.bytebuilders.dev/capi-net-configurator/pkg/cmds"
+	"go.bytebuilders.dev/capi-netcfg/pkg/cmds"
 
 	"gomodules.xyz/logs"
 	"k8s.io/klog/v2"

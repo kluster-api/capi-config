@@ -1,4 +1,4 @@
-module go.bytebuilders.dev/capi-net-configurator
+module go.bytebuilders.dev/capi-netcfg
 
 go 1.18
 

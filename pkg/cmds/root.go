@@ -17,7 +17,7 @@ limitations under the License.
 package cmds
 
 import (
-	"go.bytebuilders.dev/capi-net-configurator/pkg/cmds/config"
+	"go.bytebuilders.dev/capi-netcfg/pkg/cmds/config"
 
 	"github.com/spf13/cobra"
 	v "gomodules.xyz/x/version"
@@ -25,7 +25,7 @@ import (
 
 func NewRootCmd() *cobra.Command {
 	rootCmd := &cobra.Command{
-		Use:               "capi-net-configurator",
+		Use:               "capi-netcfg",
 		Short:             `Configure CAPI network setup`,
 		Long:              `A cli to configure CAPI network setup`,
 		DisableAutoGenTag: true,
