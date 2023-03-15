@@ -29,55 +29,38 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-func NewCmdCAPZ() *cobra.Command {
-	var (
-		vNetCidr   string
-		subnetCidr string
-	)
+func NewCmdCAPA() *cobra.Command {
+	var vpcCidr string
 	cmd := &cobra.Command{
-		Use:               "capz",
-		Short:             "Configure CAPZ network config",
+		Use:               "capa",
+		Short:             "Configure CAPA network config",
 		DisableAutoGenTag: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			in, err := io.ReadAll(os.Stdin)
 			if err != nil {
 				return err
 			}
-			if vNetCidr == "" && subnetCidr == "" {
+			if vpcCidr == "" {
 				_, err = os.Stdout.Write(in)
-				return err
-			}
-			if vNetCidr == "" {
+				if err != nil {
+					return err
+				}
 				return errors.New("missing --vnet-cidr")
-			}
-			if subnetCidr == "" {
-				return errors.New("missing --subnet-cidr")
 			}
 
 			var out bytes.Buffer
 			var foundCP bool
 			err = parser.ProcessResources(in, func(ri parser.ResourceInfo) error {
-				if ri.Object.GetAPIVersion() == "infrastructure.cluster.x-k8s.io/v1beta1" &&
-					ri.Object.GetKind() == "AzureManagedControlPlane" {
+				if ri.Object.GetAPIVersion() == "controlplane.cluster.x-k8s.io/v1beta1" &&
+					ri.Object.GetKind() == "AWSManagedControlPlane" {
 					foundCP = true
 
-					resourceGroupName, ok, err := unstructured.NestedString(ri.Object.UnstructuredContent(), "spec", "resourceGroupName")
-					if err != nil {
-						return err
-					}
-					if !ok {
-						return errors.New("resourceGroupName is missing")
-					}
-
 					netcfg := map[string]any{
-						"name":      resourceGroupName + "-vnet",
-						"cidrBlock": vNetCidr,
-						"subnet": map[string]any{
-							"name":      resourceGroupName + "-subnet",
-							"cidrBlock": subnetCidr,
+						"vpc": map[string]any{
+							"cidrBlock": vpcCidr,
 						},
 					}
-					if err := unstructured.SetNestedMap(ri.Object.UnstructuredContent(), netcfg, "spec", "virtualNetwork"); err != nil {
+					if err := unstructured.SetNestedMap(ri.Object.UnstructuredContent(), netcfg, "spec", "network"); err != nil {
 						return err
 					}
 				}
@@ -103,7 +86,6 @@ func NewCmdCAPZ() *cobra.Command {
 			return err
 		},
 	}
-	cmd.Flags().StringVar(&vNetCidr, "vnet-cidr", "", "CIDR block to be used for vNET")
-	cmd.Flags().StringVar(&subnetCidr, "subnet-cidr", "", "CIDR block to be used for subnet")
+	cmd.Flags().StringVar(&vpcCidr, "vpc-cidr", "", "CIDR block to be used for vpc")
 	return cmd
 }

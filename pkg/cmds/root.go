@@ -31,7 +31,8 @@ func NewRootCmd() *cobra.Command {
 		DisableAutoGenTag: true,
 	}
 
-	rootCmd.AddCommand(config.NewCmdAPZ())
+	rootCmd.AddCommand(config.NewCmdCAPZ())
+	rootCmd.AddCommand(config.NewCmdCAPA())
 
 	rootCmd.AddCommand(v.NewCmdVersion())
 	rootCmd.AddCommand(NewCmdCompletion())
