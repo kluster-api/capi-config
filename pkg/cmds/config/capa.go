@@ -42,10 +42,7 @@ func NewCmdCAPA() *cobra.Command {
 			}
 			if vpcCidr == "" {
 				_, err = os.Stdout.Write(in)
-				if err != nil {
-					return err
-				}
-				return errors.New("missing --vnet-cidr")
+				return err
 			}
 
 			var out bytes.Buffer
