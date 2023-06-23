@@ -8,7 +8,7 @@ require (
 	gomodules.xyz/x v0.0.14
 	k8s.io/apimachinery v0.25.3
 	k8s.io/klog/v2 v2.90.1
-	kmodules.xyz/client-go v0.25.18
+	kmodules.xyz/client-go v0.25.23
 	sigs.k8s.io/yaml v1.3.0
 )
 
