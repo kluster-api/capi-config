@@ -48,8 +48,7 @@ func NewCmdCAPA() *cobra.Command {
 			var out bytes.Buffer
 			var foundCP bool
 			err = parser.ProcessResources(in, func(ri parser.ResourceInfo) error {
-				if ri.Object.GetAPIVersion() == "controlplane.cluster.x-k8s.io/v1beta1" &&
-					ri.Object.GetKind() == "AWSManagedControlPlane" {
+				if ri.Object.GetKind() == "AWSManagedControlPlane" {
 					foundCP = true
 
 					netcfg := map[string]any{
