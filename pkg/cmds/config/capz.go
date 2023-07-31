@@ -18,18 +18,20 @@ package config
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
 	"strconv"
 
-	"encoding/json"
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	_ "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"kmodules.xyz/client-go/tools/parser"
 	"sigs.k8s.io/yaml"
 )
+
+const apiVersion = "infrastructure.cluster.x-k8s.io/v1beta1"
 
 func NewCmdCAPZ() *cobra.Command {
 	var (
@@ -81,7 +83,7 @@ func NewCmdCAPZ() *cobra.Command {
 			var foundSysAMP bool
 			var foundUserMP bool
 			err = parser.ProcessResources(in, func(ri parser.ResourceInfo) error {
-				if ri.Object.GetAPIVersion() == "infrastructure.cluster.x-k8s.io/v1beta1" &&
+				if ri.Object.GetAPIVersion() == apiVersion &&
 					ri.Object.GetKind() == "AzureManagedControlPlane" {
 					foundCP = true
 
@@ -90,7 +92,7 @@ func NewCmdCAPZ() *cobra.Command {
 						return err
 					}
 
-				} else if ri.Object.GetAPIVersion() == "infrastructure.cluster.x-k8s.io/v1beta1" &&
+				} else if ri.Object.GetAPIVersion() == apiVersion &&
 					ri.Object.GetKind() == "AzureManagedMachinePool" {
 
 					mode, ok, err := unstructured.NestedString(ri.Object.UnstructuredContent(), "spec", "mode")
@@ -184,7 +186,6 @@ func NewCmdCAPZ() *cobra.Command {
 }
 
 func mpCfg(ri parser.ResourceInfo, minSize int, maxSize int) error {
-
 	scalingCfg := map[string]any{
 		"cluster.x-k8s.io/cluster-api-autoscaler-node-group-min-size": strconv.Itoa(minSize),
 		"cluster.x-k8s.io/cluster-api-autoscaler-node-group-max-size": strconv.Itoa(maxSize),
@@ -193,14 +194,18 @@ func mpCfg(ri parser.ResourceInfo, minSize int, maxSize int) error {
 	if err := unstructured.SetNestedMap(ri.Object.UnstructuredContent(), scalingCfg, "metadata", "annotations"); err != nil {
 		return err
 	}
-	if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), deepCopy(minSize), "spec", "replicas"); err != nil {
+
+	minSz, err := deepCopy(minSize)
+	if err != nil {
+		return err
+	}
+	if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), minSz, "spec", "replicas"); err != nil {
 		return err
 	}
 	return nil
 }
 
 func ampCfg(ri parser.ResourceInfo, mode string, minSize int, maxSize int) error {
-
 	if mode == "System" {
 		taint := map[string]any{
 			"key":    "CriticalAddonsOnly",
@@ -213,9 +218,17 @@ func ampCfg(ri parser.ResourceInfo, mode string, minSize int, maxSize int) error
 		}
 	}
 
+	minSz, err := deepCopy(minSize)
+	if err != nil {
+		return err
+	}
+	maxSz, err := deepCopy(maxSize)
+	if err != nil {
+		return err
+	}
 	scalingCfg := map[string]any{
-		"minSize": deepCopy(minSize),
-		"maxSize": deepCopy(maxSize),
+		"minSize": minSz,
+		"maxSize": maxSz,
 	}
 	if err := unstructured.SetNestedMap(ri.Object.UnstructuredContent(), scalingCfg, "spec", "scaling"); err != nil {
 		return err
@@ -246,9 +259,16 @@ func netCfg(ri parser.ResourceInfo, vNetCidr string, subnetCidr string) error {
 	return nil
 }
 
-func deepCopy(src interface{}) interface{} {
+func deepCopy(src interface{}) (interface{}, error) {
 	var copy interface{}
-	data, _ := json.Marshal(src)
-	json.Unmarshal(data, &copy)
-	return copy
+	data, err := json.Marshal(src)
+	if err != nil {
+		return "", err
+	}
+
+	if err := json.Unmarshal(data, &copy); err != nil {
+		return "", err
+	}
+
+	return copy, nil
 }
