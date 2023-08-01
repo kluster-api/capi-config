@@ -18,11 +18,9 @@ package config
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"io"
 	"os"
-	"strconv"
 
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -38,11 +36,11 @@ func NewCmdCAPZ() *cobra.Command {
 		vNetCidr   string
 		subnetCidr string
 
-		systemMinSize int
-		systemMaxSize int
+		systemMinSize int64
+		systemMaxSize int64
 
-		userMinSize int
-		userMaxSize int
+		userMinSize int64
+		userMaxSize int64
 	)
 	cmd := &cobra.Command{
 		Use:               "capz",
@@ -103,8 +101,8 @@ func NewCmdCAPZ() *cobra.Command {
 						return errors.New("mode in spec of AzureManagedMachinePool is missing")
 					}
 
-					var minSize int
-					var maxSize int
+					var minSize int64
+					var maxSize int64
 					if mode == "System" {
 						foundSysAMP = true
 						minSize = systemMinSize
@@ -123,8 +121,8 @@ func NewCmdCAPZ() *cobra.Command {
 				} else if ri.Object.GetAPIVersion() == "cluster.x-k8s.io/v1beta1" &&
 					ri.Object.GetKind() == "MachinePool" {
 
-					var minSize int
-					var maxSize int
+					var minSize int64
+					var maxSize int64
 					if !foundSysMP {
 						foundSysMP = true
 						minSize = systemMinSize
@@ -177,35 +175,31 @@ func NewCmdCAPZ() *cobra.Command {
 	cmd.Flags().StringVar(&vNetCidr, "vnet-cidr", "", "CIDR block to be used for vNET")
 	cmd.Flags().StringVar(&subnetCidr, "subnet-cidr", "", "CIDR block to be used for subnet")
 
-	cmd.Flags().IntVar(&systemMinSize, "system-min-size", -1, "Minimum node count for System Machine Pool")
-	cmd.Flags().IntVar(&systemMaxSize, "system-max-size", -1, "Minimum node count for System Machine Pool")
+	cmd.Flags().Int64Var(&systemMinSize, "system-min-size", -1, "Minimum node count for System Machine Pool")
+	cmd.Flags().Int64Var(&systemMaxSize, "system-max-size", -1, "Minimum node count for System Machine Pool")
 
-	cmd.Flags().IntVar(&userMinSize, "user-min-size", -1, "Minimum node count for User Machine Pool")
-	cmd.Flags().IntVar(&userMaxSize, "user-max-size", -1, "Minimum node count for User Machine Pool")
+	cmd.Flags().Int64Var(&userMinSize, "user-min-size", -1, "Minimum node count for User Machine Pool")
+	cmd.Flags().Int64Var(&userMaxSize, "user-max-size", -1, "Minimum node count for User Machine Pool")
 	return cmd
 }
 
-func mpCfg(ri parser.ResourceInfo, minSize int, maxSize int) error {
+func mpCfg(ri parser.ResourceInfo, minSize int64, maxSize int64) error {
 	scalingCfg := map[string]any{
-		"cluster.x-k8s.io/cluster-api-autoscaler-node-group-min-size": strconv.Itoa(minSize),
-		"cluster.x-k8s.io/cluster-api-autoscaler-node-group-max-size": strconv.Itoa(maxSize),
+		"cluster.x-k8s.io/cluster-api-autoscaler-node-group-min-size": minSize,
+		"cluster.x-k8s.io/cluster-api-autoscaler-node-group-max-size": maxSize,
 	}
 
 	if err := unstructured.SetNestedMap(ri.Object.UnstructuredContent(), scalingCfg, "metadata", "annotations"); err != nil {
 		return err
 	}
 
-	minSz, err := deepCopy(minSize)
-	if err != nil {
-		return err
-	}
-	if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), minSz, "spec", "replicas"); err != nil {
+	if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), minSize, "spec", "replicas"); err != nil {
 		return err
 	}
 	return nil
 }
 
-func ampCfg(ri parser.ResourceInfo, mode string, minSize int, maxSize int) error {
+func ampCfg(ri parser.ResourceInfo, mode string, minSize int64, maxSize int64) error {
 	if mode == "System" {
 		taint := map[string]any{
 			"key":    "CriticalAddonsOnly",
@@ -218,17 +212,9 @@ func ampCfg(ri parser.ResourceInfo, mode string, minSize int, maxSize int) error
 		}
 	}
 
-	minSz, err := deepCopy(minSize)
-	if err != nil {
-		return err
-	}
-	maxSz, err := deepCopy(maxSize)
-	if err != nil {
-		return err
-	}
 	scalingCfg := map[string]any{
-		"minSize": minSz,
-		"maxSize": maxSz,
+		"minSize": minSize,
+		"maxSize": maxSize,
 	}
 	if err := unstructured.SetNestedMap(ri.Object.UnstructuredContent(), scalingCfg, "spec", "scaling"); err != nil {
 		return err
@@ -257,18 +243,4 @@ func netCfg(ri parser.ResourceInfo, vNetCidr string, subnetCidr string) error {
 		return err
 	}
 	return nil
-}
-
-func deepCopy(src interface{}) (interface{}, error) {
-	var copy interface{}
-	data, err := json.Marshal(src)
-	if err != nil {
-		return "", err
-	}
-
-	if err := json.Unmarshal(data, &copy); err != nil {
-		return "", err
-	}
-
-	return copy, nil
 }
