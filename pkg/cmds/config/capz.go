@@ -19,13 +19,14 @@ package config
 import (
 	"bytes"
 	"errors"
-	"io"
-	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
+	"io"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	_ "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"kmodules.xyz/client-go/tools/parser"
+	"os"
 	"sigs.k8s.io/yaml"
 )
 
@@ -36,11 +37,11 @@ func NewCmdCAPZ() *cobra.Command {
 		vNetCidr   string
 		subnetCidr string
 
-		systemMinSize int64
-		systemMaxSize int64
+		systemMPMinSize int64
+		systemMPMaxSize int64
 
-		userMinSize int64
-		userMaxSize int64
+		userMPMinSize int64
+		userMPMaxSize int64
 	)
 	cmd := &cobra.Command{
 		Use:               "capz",
@@ -61,36 +62,24 @@ func NewCmdCAPZ() *cobra.Command {
 			if subnetCidr == "" {
 				return errors.New("missing --subnet-cidr")
 			}
-			if systemMaxSize == -1 {
-				return errors.New("missing --systemMaxSize")
-			}
-			if systemMinSize == -1 {
-				return errors.New("missing --systemMinSize")
-			}
-			if userMinSize == -1 {
-				return errors.New("missing --userMinSize")
-			}
-			if userMaxSize == -1 {
-				return errors.New("missing --userMaxSize")
-			}
 
 			var out bytes.Buffer
 			var foundCP bool
-			var foundUserAMP bool
+			var foundUserManagedMP bool
 			var foundSysMP bool
-			var foundSysAMP bool
+			var foundSysManagedMP bool
 			var foundUserMP bool
 			err = parser.ProcessResources(in, func(ri parser.ResourceInfo) error {
-				if ri.Object.GetAPIVersion() == apiVersion &&
+				if ri.Object.GetAPIVersion() == infraApiVersion &&
 					ri.Object.GetKind() == "AzureManagedControlPlane" {
 					foundCP = true
 
-					err := netCfg(ri, vNetCidr, subnetCidr)
+					err := SetAzureNetworkConfiguration(ri, vNetCidr, subnetCidr)
 					if err != nil {
 						return err
 					}
 
-				} else if ri.Object.GetAPIVersion() == apiVersion &&
+				} else if ri.Object.GetAPIVersion() == infraApiVersion &&
 					ri.Object.GetKind() == "AzureManagedMachinePool" {
 
 					mode, ok, err := unstructured.NestedString(ri.Object.UnstructuredContent(), "spec", "mode")
@@ -104,35 +93,43 @@ func NewCmdCAPZ() *cobra.Command {
 					var minSize int64
 					var maxSize int64
 					if mode == "System" {
-						foundSysAMP = true
-						minSize = systemMinSize
-						maxSize = systemMaxSize
+						foundSysManagedMP = true
+						minSize = systemMPMinSize
+						maxSize = systemMPMaxSize
 
 					} else if mode == "User" {
-						foundUserAMP = true
-						minSize = userMinSize
-						maxSize = userMaxSize
+						foundUserManagedMP = true
+						minSize = userMPMinSize
+						maxSize = userMPMaxSize
 					}
-					err = ampCfg(ri, mode, minSize, maxSize)
+					err = SetAzureManagedMPConfiguration(ri, mode, minSize, maxSize)
 					if err != nil {
 						return err
 					}
 
-				} else if ri.Object.GetAPIVersion() == "cluster.x-k8s.io/v1beta1" &&
+				} else if ri.Object.GetAPIVersion() == clusterApiVersion &&
 					ri.Object.GetKind() == "MachinePool" {
 
+					name, ok, err := unstructured.NestedString(ri.Object.UnstructuredContent(), "metadata", "name")
+					if err != nil {
+						return err
+					}
+					if !ok {
+						return errors.New("name in MachinePool is missing")
+					}
+					mode := strings.HasSuffix(name, "pool0")
 					var minSize int64
 					var maxSize int64
-					if !foundSysMP {
+					if mode == true {
 						foundSysMP = true
-						minSize = systemMinSize
-						maxSize = systemMaxSize
+						minSize = systemMPMinSize
+						maxSize = systemMPMaxSize
 					} else {
 						foundUserMP = true
-						minSize = userMinSize
-						maxSize = userMaxSize
+						minSize = userMPMinSize
+						maxSize = userMPMaxSize
 					}
-					err := mpCfg(ri, minSize, maxSize)
+					err = SetMPConfiguration(ri, minSize, maxSize)
 					if err != nil {
 						return err
 					}
@@ -155,10 +152,10 @@ func NewCmdCAPZ() *cobra.Command {
 			if !foundCP {
 				return errors.New("control plane not found, check apiVersion")
 			}
-			if !foundSysAMP {
+			if !foundSysManagedMP {
 				return errors.New("System AzureManagedMachinePool not found")
 			}
-			if !foundUserAMP {
+			if !foundUserManagedMP {
 				return errors.New("User AzureManagedMachinePool not found")
 			}
 			if !foundSysMP {
@@ -175,31 +172,15 @@ func NewCmdCAPZ() *cobra.Command {
 	cmd.Flags().StringVar(&vNetCidr, "vnet-cidr", "", "CIDR block to be used for vNET")
 	cmd.Flags().StringVar(&subnetCidr, "subnet-cidr", "", "CIDR block to be used for subnet")
 
-	cmd.Flags().Int64Var(&systemMinSize, "system-min-size", -1, "Minimum node count for System Machine Pool")
-	cmd.Flags().Int64Var(&systemMaxSize, "system-max-size", -1, "Minimum node count for System Machine Pool")
+	cmd.Flags().Int64Var(&systemMPMinSize, "system-min-size", 1, "Minimum node count for System Machine Pool")
+	cmd.Flags().Int64Var(&systemMPMaxSize, "system-max-size", 2, "Minimum node count for System Machine Pool")
 
-	cmd.Flags().Int64Var(&userMinSize, "user-min-size", -1, "Minimum node count for User Machine Pool")
-	cmd.Flags().Int64Var(&userMaxSize, "user-max-size", -1, "Minimum node count for User Machine Pool")
+	cmd.Flags().Int64Var(&userMPMinSize, "user-min-size", 2, "Minimum node count for User Machine Pool")
+	cmd.Flags().Int64Var(&userMPMaxSize, "user-max-size", 5, "Minimum node count for User Machine Pool")
 	return cmd
 }
 
-func mpCfg(ri parser.ResourceInfo, minSize int64, maxSize int64) error {
-	scalingCfg := map[string]any{
-		"cluster.x-k8s.io/cluster-api-autoscaler-node-group-min-size": minSize,
-		"cluster.x-k8s.io/cluster-api-autoscaler-node-group-max-size": maxSize,
-	}
-
-	if err := unstructured.SetNestedMap(ri.Object.UnstructuredContent(), scalingCfg, "metadata", "annotations"); err != nil {
-		return err
-	}
-
-	if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), minSize, "spec", "replicas"); err != nil {
-		return err
-	}
-	return nil
-}
-
-func ampCfg(ri parser.ResourceInfo, mode string, minSize int64, maxSize int64) error {
+func SetAzureManagedMPConfiguration(ri parser.ResourceInfo, mode string, minSize interface{}, maxSize interface{}) error {
 	if mode == "System" {
 		taint := map[string]any{
 			"key":    "CriticalAddonsOnly",
@@ -219,10 +200,11 @@ func ampCfg(ri parser.ResourceInfo, mode string, minSize int64, maxSize int64) e
 	if err := unstructured.SetNestedMap(ri.Object.UnstructuredContent(), scalingCfg, "spec", "scaling"); err != nil {
 		return err
 	}
+
 	return nil
 }
 
-func netCfg(ri parser.ResourceInfo, vNetCidr string, subnetCidr string) error {
+func SetAzureNetworkConfiguration(ri parser.ResourceInfo, vNetCidr string, subnetCidr string) error {
 	resourceGroupName, ok, err := unstructured.NestedString(ri.Object.UnstructuredContent(), "spec", "resourceGroupName")
 	if err != nil {
 		return err

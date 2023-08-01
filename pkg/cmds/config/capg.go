@@ -20,10 +20,10 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"os"
 
 	"github.com/spf13/cobra"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	_ "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"kmodules.xyz/client-go/tools/parser"
 	"sigs.k8s.io/yaml"
@@ -51,37 +51,12 @@ func NewCmdCAPG() *cobra.Command {
 				if ri.Object.GetAPIVersion() == "infrastructure.cluster.x-k8s.io/v1beta1" &&
 					ri.Object.GetKind() == "GCPManagedCluster" {
 					foundCP = true
-
-					networkName, ok, err := unstructured.NestedString(ri.Object.UnstructuredContent(), "spec", "network", "name")
+					err := gmpNetCfg(ri, subnetCidr)
 					if err != nil {
 						return err
 					}
-					if !ok {
-						return errors.New("network name is missing")
-					}
+				} else if ri.Object.GetAPIVersion() == "" {
 
-					region, ok, err := unstructured.NestedString(ri.Object.UnstructuredContent(), "spec", "region")
-					if err != nil {
-						return err
-					}
-					if !ok {
-						return errors.New("region name is missing")
-					}
-
-					subnets := []interface{}{
-						map[string]any{
-							"name":      networkName + "-subnet",
-							"region":    region,
-							"cidrBlock": subnetCidr,
-						},
-					}
-
-					if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), false, "spec", "network", "autoCreateSubnetworks"); err != nil {
-						return err
-					}
-					if err := unstructured.SetNestedSlice(ri.Object.UnstructuredContent(), subnets, "spec", "network", "subnets"); err != nil {
-						return err
-					}
 				}
 
 				data, err := yaml.Marshal(ri.Object)
@@ -107,4 +82,39 @@ func NewCmdCAPG() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&subnetCidr, "subnet-cidr", "", "CIDR block to be used for subnet")
 	return cmd
+}
+
+func gmpNetCfg(ri parser.ResourceInfo, subnetCidr string) error {
+
+	networkName, ok, err := unstructured.NestedString(ri.Object.UnstructuredContent(), "spec", "network", "name")
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return errors.New("network name is missing")
+	}
+
+	region, ok, err := unstructured.NestedString(ri.Object.UnstructuredContent(), "spec", "region")
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return errors.New("region name is missing")
+	}
+
+	subnets := []interface{}{
+		map[string]any{
+			"name":      networkName + "-subnet",
+			"region":    region,
+			"cidrBlock": subnetCidr,
+		},
+	}
+
+	if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), false, "spec", "network", "autoCreateSubnetworks"); err != nil {
+		return err
+	}
+	if err := unstructured.SetNestedSlice(ri.Object.UnstructuredContent(), subnets, "spec", "network", "subnets"); err != nil {
+		return err
+	}
+	return nil
 }
