@@ -20,10 +20,10 @@ import (
 	"bytes"
 	"errors"
 	"io"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"os"
 
 	"github.com/spf13/cobra"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	_ "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"kmodules.xyz/client-go/tools/parser"
 	"sigs.k8s.io/yaml"
@@ -31,9 +31,12 @@ import (
 
 func NewCmdCAPG() *cobra.Command {
 	var subnetCidr string
+	var minSize int64
+	var maxSize int64
+
 	cmd := &cobra.Command{
 		Use:               "capg",
-		Short:             "Configure CAPG network config",
+		Short:             "Configure CAPG config",
 		DisableAutoGenTag: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			in, err := io.ReadAll(os.Stdin)
@@ -47,16 +50,32 @@ func NewCmdCAPG() *cobra.Command {
 
 			var out bytes.Buffer
 			var foundCP bool
+			var foundMP bool
+			var foundManagedMP bool
 			err = parser.ProcessResources(in, func(ri parser.ResourceInfo) error {
-				if ri.Object.GetAPIVersion() == "infrastructure.cluster.x-k8s.io/v1beta1" &&
+				if ri.Object.GetAPIVersion() == infraApiVersion &&
 					ri.Object.GetKind() == "GCPManagedCluster" {
 					foundCP = true
-					err := gmpNetCfg(ri, subnetCidr)
-					if err != nil {
+
+					if err := SetGCPNetworkConfiguration(ri, subnetCidr); err != nil {
 						return err
 					}
-				} else if ri.Object.GetAPIVersion() == "" {
 
+				} else if ri.Object.GetAPIVersion() == infraApiVersion &&
+					ri.Object.GetKind() == "GCPManagedMachinePool" {
+					foundManagedMP = true
+
+					if err := SetGCPManagedMPConfiguration(ri, minSize, maxSize); err != nil {
+						return err
+					}
+
+				} else if ri.Object.GetAPIVersion() == clusterApiVersion &&
+					ri.Object.GetKind() == "MachinePool" {
+					foundMP = true
+
+					if err := SetMPConfiguration(ri, minSize, maxSize); err != nil {
+						return err
+					}
 				}
 
 				data, err := yaml.Marshal(ri.Object)
@@ -75,17 +94,34 @@ func NewCmdCAPG() *cobra.Command {
 			if !foundCP {
 				return errors.New("control plane not found, check apiVersion")
 			}
-
+			if !foundMP {
+				return errors.New("MachinePool not found")
+			}
+			if !foundManagedMP {
+				return errors.New("GCPManagedMachinePool not found")
+			}
 			_, err = os.Stdout.Write(out.Bytes())
 			return err
 		},
 	}
 	cmd.Flags().StringVar(&subnetCidr, "subnet-cidr", "", "CIDR block to be used for subnet")
+	cmd.Flags().Int64Var(&minSize, "min-count", 3, "Minimum count of nodes in nodepool")
+	cmd.Flags().Int64Var(&maxSize, "max-count", 6, "Maximum count of nodes in nodepool")
 	return cmd
 }
 
-func gmpNetCfg(ri parser.ResourceInfo, subnetCidr string) error {
+func SetGCPManagedMPConfiguration(ri parser.ResourceInfo, minSize int64, maxSize int64) error {
+	scalingCfg := map[string]any{
+		"minCount": minSize,
+		"maxCount": maxSize,
+	}
+	if err := unstructured.SetNestedMap(ri.Object.UnstructuredContent(), scalingCfg, "spec", "scaling"); err != nil {
+		return err
+	}
+	return nil
+}
 
+func SetGCPNetworkConfiguration(ri parser.ResourceInfo, subnetCidr string) error {
 	networkName, ok, err := unstructured.NestedString(ri.Object.UnstructuredContent(), "spec", "network", "name")
 	if err != nil {
 		return err

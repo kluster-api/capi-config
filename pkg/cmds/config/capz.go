@@ -19,18 +19,16 @@ package config
 import (
 	"bytes"
 	"errors"
+	"io"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
-	"io"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	_ "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"kmodules.xyz/client-go/tools/parser"
-	"os"
 	"sigs.k8s.io/yaml"
 )
-
-const apiVersion = "infrastructure.cluster.x-k8s.io/v1beta1"
 
 func NewCmdCAPZ() *cobra.Command {
 	var (
@@ -45,7 +43,7 @@ func NewCmdCAPZ() *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:               "capz",
-		Short:             "Configure CAPZ network config",
+		Short:             "Configure CAPZ config",
 		DisableAutoGenTag: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			in, err := io.ReadAll(os.Stdin)
@@ -74,8 +72,7 @@ func NewCmdCAPZ() *cobra.Command {
 					ri.Object.GetKind() == "AzureManagedControlPlane" {
 					foundCP = true
 
-					err := SetAzureNetworkConfiguration(ri, vNetCidr, subnetCidr)
-					if err != nil {
+					if err := SetAzureNetworkConfiguration(ri, vNetCidr, subnetCidr); err != nil {
 						return err
 					}
 
@@ -102,8 +99,7 @@ func NewCmdCAPZ() *cobra.Command {
 						minSize = userMPMinSize
 						maxSize = userMPMaxSize
 					}
-					err = SetAzureManagedMPConfiguration(ri, mode, minSize, maxSize)
-					if err != nil {
+					if err := SetAzureManagedMPConfiguration(ri, mode, minSize, maxSize); err != nil {
 						return err
 					}
 
@@ -120,7 +116,7 @@ func NewCmdCAPZ() *cobra.Command {
 					mode := strings.HasSuffix(name, "pool0")
 					var minSize int64
 					var maxSize int64
-					if mode == true {
+					if mode {
 						foundSysMP = true
 						minSize = systemMPMinSize
 						maxSize = systemMPMaxSize
@@ -129,8 +125,7 @@ func NewCmdCAPZ() *cobra.Command {
 						minSize = userMPMinSize
 						maxSize = userMPMaxSize
 					}
-					err = SetMPConfiguration(ri, minSize, maxSize)
-					if err != nil {
+					if err := SetMPConfiguration(ri, minSize, maxSize); err != nil {
 						return err
 					}
 				}
@@ -153,16 +148,16 @@ func NewCmdCAPZ() *cobra.Command {
 				return errors.New("control plane not found, check apiVersion")
 			}
 			if !foundSysManagedMP {
-				return errors.New("System AzureManagedMachinePool not found")
+				return errors.New("system AzureManagedMachinePool not found")
 			}
 			if !foundUserManagedMP {
-				return errors.New("User AzureManagedMachinePool not found")
+				return errors.New("user AzureManagedMachinePool not found")
 			}
 			if !foundSysMP {
-				return errors.New("System MachinePool not found")
+				return errors.New("system MachinePool not found")
 			}
 			if !foundUserMP {
-				return errors.New("User MachinePool not found")
+				return errors.New("user MachinePool not found")
 			}
 
 			_, err = os.Stdout.Write(out.Bytes())
@@ -180,7 +175,7 @@ func NewCmdCAPZ() *cobra.Command {
 	return cmd
 }
 
-func SetAzureManagedMPConfiguration(ri parser.ResourceInfo, mode string, minSize interface{}, maxSize interface{}) error {
+func SetAzureManagedMPConfiguration(ri parser.ResourceInfo, mode string, minSize int64, maxSize int64) error {
 	if mode == "System" {
 		taint := map[string]any{
 			"key":    "CriticalAddonsOnly",
