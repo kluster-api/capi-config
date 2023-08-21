@@ -16,7 +16,7 @@ SHELL=/bin/bash -o pipefail
 
 GO_PKG   := go.bytebuilders.dev
 REPO     := $(notdir $(shell pwd))
-BIN      := capi-netcfg
+BIN      := capi-config
 COMPRESS ?= no
 
 # This version-strategy uses git tags to set the version string

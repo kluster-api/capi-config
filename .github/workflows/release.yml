@@ -65,12 +65,12 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: |
-            bin/capi-netcfg-darwin-amd64.tar.gz
-            bin/capi-netcfg-darwin-arm64.tar.gz
-            bin/capi-netcfg-linux-amd64.tar.gz
-            bin/capi-netcfg-linux-arm.tar.gz
-            bin/capi-netcfg-linux-arm64.tar.gz
-            bin/capi-netcfg-windows-amd64.zip
-            bin/capi-netcfg-checksums.txt
+            bin/capi-config-darwin-amd64.tar.gz
+            bin/capi-config-darwin-arm64.tar.gz
+            bin/capi-config-linux-amd64.tar.gz
+            bin/capi-config-linux-arm.tar.gz
+            bin/capi-config-linux-arm64.tar.gz
+            bin/capi-config-windows-amd64.zip
+            bin/capi-config-checksums.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
