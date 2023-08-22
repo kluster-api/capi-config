@@ -27,7 +27,7 @@ func NewRootCmd() *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:               "capi-config",
 		Short:             `Configure CAPI network setup`,
-		Long:              `A cli to configure CAPI network setup`,
+		Long:              `A cli to configure CAPI setup`,
 		DisableAutoGenTag: true,
 	}
 
