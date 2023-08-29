@@ -30,14 +30,14 @@ import (
 )
 
 const (
-	awsManagedControlPlane     = "AWSManagedControlPlane"
-	awsManagedMachinePool      = "AWSManagedMachinePool"
-	machinePool                = "MachinePool"
-	cluster                    = "Cluster"
+	awsManagedControlPlaneKind = "AWSManagedControlPlane"
+	awsManagedMachinePoolKind  = "AWSManagedMachinePool"
+	machinePoolKind            = "MachinePool"
+	clusterKind                = "Cluster"
 	controlplaneRoleAnnotation = "eks.amazonaws.com/controlplane-role"
 )
 
-func managedCPCIDR(ri *parser.ResourceInfo, vpcCidr string) error {
+func setAWSManagedCPCIDR(ri *parser.ResourceInfo, vpcCidr string) error {
 	netcfg := map[string]any{
 		"vpc": map[string]any{
 			"cidrBlock": vpcCidr,
@@ -49,14 +49,14 @@ func managedCPCIDR(ri *parser.ResourceInfo, vpcCidr string) error {
 	return nil
 }
 
-func managedCPRole(ri *parser.ResourceInfo, roleName string) error {
+func setAWSManagedCPRole(ri *parser.ResourceInfo, roleName string) error {
 	if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), roleName, "spec", "roleName"); err != nil {
 		return err
 	}
 	return nil
 }
 
-func managedMPScaling(ri *parser.ResourceInfo, minNodeCount, maxNodeCount int64) error {
+func setAWSManagedMPScaling(ri *parser.ResourceInfo, minNodeCount, maxNodeCount int64) error {
 	scaling := map[string]any{
 		"minSize": minNodeCount,
 		"maxSize": maxNodeCount,
@@ -67,14 +67,14 @@ func managedMPScaling(ri *parser.ResourceInfo, minNodeCount, maxNodeCount int64)
 	return nil
 }
 
-func managedMPRole(ri *parser.ResourceInfo, roleName string) error {
+func setAWSManagedMPRole(ri *parser.ResourceInfo, roleName string) error {
 	if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), roleName, "spec", "roleName"); err != nil {
 		return err
 	}
 	return nil
 }
 
-func clusterAnnotations(ri *parser.ResourceInfo, managedControlplaneRole string) error {
+func setAWSClusterAnnotations(ri *parser.ResourceInfo, managedControlplaneRole string) error {
 	if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), managedControlplaneRole, "metadata", "annotations", controlplaneRoleAnnotation); err != nil {
 		return err
 	}
@@ -90,7 +90,7 @@ type validationHelper struct {
 }
 
 func validation(helper validationHelper) error {
-	if !helper.isFound[awsManagedControlPlane] {
+	if !helper.isFound[awsManagedControlPlaneKind] {
 		if helper.vpcCidr != "" {
 			return errors.New("failed to get AWSManagedControlPlane for cidr update")
 		}
@@ -101,10 +101,10 @@ func validation(helper validationHelper) error {
 	if helper.minCount > helper.maxCount {
 		return errors.New("max node count can't be less than min node count")
 	}
-	if helper.managedMachinepoolRole != "" && !helper.isFound[awsManagedMachinePool] {
+	if helper.managedMachinepoolRole != "" && !helper.isFound[awsManagedMachinePoolKind] {
 		return errors.New("failed to get AWSManagedMachinePool for role configuration")
 	}
-	if !helper.isFound[cluster] && helper.managedControlplaneRole != "" {
+	if !helper.isFound[clusterKind] && helper.managedControlplaneRole != "" {
 		return errors.New("failed to get ControlPlane to update annotations")
 	}
 	return nil
@@ -126,49 +126,49 @@ func NewCmdCAPA() *cobra.Command {
 
 			var out bytes.Buffer
 			err = parser.ProcessResources(in, func(ri parser.ResourceInfo) error {
-				if ri.Object.GetKind() == awsManagedControlPlane {
-					isFound[awsManagedControlPlane] = true
+				if ri.Object.GetKind() == awsManagedControlPlaneKind {
+					isFound[awsManagedControlPlaneKind] = true
 					if vpcCidr != "" {
-						e := managedCPCIDR(&ri, vpcCidr)
-						if e != nil {
-							return e
+						err := setAWSManagedCPCIDR(&ri, vpcCidr)
+						if err != nil {
+							return err
 						}
 					}
 					if managedControlplaneRole != "" {
-						e := managedCPRole(&ri, managedControlplaneRole)
-						if e != nil {
-							return e
+						err := setAWSManagedCPRole(&ri, managedControlplaneRole)
+						if err != nil {
+							return err
 						}
 					}
 				}
 
-				if ri.Object.GetKind() == machinePool {
-					isFound[machinePool] = true
-					e := SetMPConfiguration(ri, minNodeCount, maxNodeCount)
-					if e != nil {
-						return e
+				if ri.Object.GetKind() == machinePoolKind {
+					isFound[machinePoolKind] = true
+					err := SetMPConfiguration(ri, minNodeCount, maxNodeCount)
+					if err != nil {
+						return err
 					}
 				}
 
-				if ri.Object.GetKind() == awsManagedMachinePool {
-					isFound[awsManagedMachinePool] = true
-					e := managedMPScaling(&ri, minNodeCount, maxNodeCount)
-					if e != nil {
-						return e
+				if ri.Object.GetKind() == awsManagedMachinePoolKind {
+					isFound[awsManagedMachinePoolKind] = true
+					err := setAWSManagedMPScaling(&ri, minNodeCount, maxNodeCount)
+					if err != nil {
+						return err
 					}
 					if managedMachinepoolRole != "" {
-						e = managedMPRole(&ri, managedMachinepoolRole)
-						if e != nil {
-							return e
+						err = setAWSManagedMPRole(&ri, managedMachinepoolRole)
+						if err != nil {
+							return err
 						}
 					}
 				}
 
-				if ri.Object.GetKind() == cluster {
-					isFound[cluster] = true
-					e := clusterAnnotations(&ri, managedControlplaneRole)
-					if e != nil {
-						return e
+				if ri.Object.GetKind() == clusterKind {
+					isFound[clusterKind] = true
+					err := setAWSClusterAnnotations(&ri, managedControlplaneRole)
+					if err != nil {
+						return err
 					}
 				}
 
