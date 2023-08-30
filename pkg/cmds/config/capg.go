@@ -65,7 +65,7 @@ func NewCmdCAPG() *cobra.Command {
 					ri.Object.GetKind() == "GCPManagedMachinePool" {
 					foundManagedMP = true
 
-					if err := SetGCPManagedMPConfiguration(ri, minSize, maxSize); err != nil {
+					if err := SetGCPManagedMPConfiguration(ri, deafultMachinePoolName, minSize, maxSize); err != nil {
 						return err
 					}
 
@@ -73,7 +73,7 @@ func NewCmdCAPG() *cobra.Command {
 					ri.Object.GetKind() == "MachinePool" {
 					foundMP = true
 
-					if err := SetMPConfiguration(ri, minSize, maxSize); err != nil {
+					if err := SetMPConfiguration(ri, deafultMachinePoolName, minSize, maxSize); err != nil {
 						return err
 					}
 				}
@@ -110,12 +110,16 @@ func NewCmdCAPG() *cobra.Command {
 	return cmd
 }
 
-func SetGCPManagedMPConfiguration(ri parser.ResourceInfo, minSize int64, maxSize int64) error {
+func SetGCPManagedMPConfiguration(ri parser.ResourceInfo, name string, minSize int64, maxSize int64) error {
 	scalingCfg := map[string]any{
 		"minCount": minSize,
 		"maxCount": maxSize,
 	}
 	if err := unstructured.SetNestedMap(ri.Object.UnstructuredContent(), scalingCfg, "spec", "scaling"); err != nil {
+		return err
+	}
+
+	if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), name, "metadata", "name"); err != nil {
 		return err
 	}
 	return nil
