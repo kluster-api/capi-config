@@ -35,6 +35,7 @@ const (
 	machinePoolKind            = "MachinePool"
 	clusterKind                = "Cluster"
 	controlplaneRoleAnnotation = "eks.amazonaws.com/controlplane-role"
+	machinepoolRoleAnnotation  = "eks.amazonaws.com/machinepool-role"
 )
 
 func setAWSManagedCPCIDR(ri *parser.ResourceInfo, vpcCidr string) error {
@@ -64,6 +65,9 @@ func setAWSManagedMPScaling(ri *parser.ResourceInfo, minNodeCount, maxNodeCount 
 	if err := unstructured.SetNestedMap(ri.Object.UnstructuredContent(), scaling, "spec", "scaling"); err != nil {
 		return err
 	}
+	if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), "default", "metadata", "name"); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -74,9 +78,16 @@ func setAWSManagedMPRole(ri *parser.ResourceInfo, roleName string) error {
 	return nil
 }
 
-func setAWSClusterAnnotations(ri *parser.ResourceInfo, managedControlplaneRole string) error {
-	if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), managedControlplaneRole, "metadata", "annotations", controlplaneRoleAnnotation); err != nil {
-		return err
+func setAWSClusterAnnotations(ri *parser.ResourceInfo, managedControlplaneRole, managedMachinepoolRole string) error {
+	if managedControlplaneRole != "" {
+		if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), managedControlplaneRole, "metadata", "annotations", controlplaneRoleAnnotation); err != nil {
+			return err
+		}
+	}
+	if managedMachinepoolRole != "" {
+		if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), managedMachinepoolRole, "metadata", "annotations", machinepoolRoleAnnotation); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -104,8 +115,10 @@ func validation(helper validationHelper) error {
 	if helper.managedMachinepoolRole != "" && !helper.isFound[awsManagedMachinePoolKind] {
 		return errors.New("failed to get AWSManagedMachinePool for role configuration")
 	}
-	if !helper.isFound[clusterKind] && helper.managedControlplaneRole != "" {
-		return errors.New("failed to get ControlPlane to update annotations")
+	if !helper.isFound[clusterKind] {
+		if helper.managedControlplaneRole != "" || helper.managedMachinepoolRole != "" {
+			return errors.New("failed to get Cluster Kind to update annotations")
+		}
 	}
 	return nil
 }
@@ -166,7 +179,7 @@ func NewCmdCAPA() *cobra.Command {
 
 				if ri.Object.GetKind() == clusterKind {
 					isFound[clusterKind] = true
-					err := setAWSClusterAnnotations(&ri, managedControlplaneRole)
+					err := setAWSClusterAnnotations(&ri, managedControlplaneRole, managedMachinepoolRole)
 					if err != nil {
 						return err
 					}
