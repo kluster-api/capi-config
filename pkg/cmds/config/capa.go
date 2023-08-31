@@ -29,8 +29,104 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
+const (
+	awsManagedControlPlaneKind = "AWSManagedControlPlane"
+	awsManagedMachinePoolKind  = "AWSManagedMachinePool"
+	machinePoolKind            = "MachinePool"
+	clusterKind                = "Cluster"
+	controlplaneRoleAnnotation = "eks.amazonaws.com/controlplane-role"
+	machinepoolRoleAnnotation  = "eks.amazonaws.com/machinepool-role"
+)
+
+func setAWSManagedCPCIDR(ri *parser.ResourceInfo, vpcCidr string) error {
+	netcfg := map[string]any{
+		"vpc": map[string]any{
+			"cidrBlock": vpcCidr,
+		},
+	}
+	if err := unstructured.SetNestedMap(ri.Object.UnstructuredContent(), netcfg, "spec", "network"); err != nil {
+		return err
+	}
+	return nil
+}
+
+func setAWSManagedCPRole(ri *parser.ResourceInfo, roleName string) error {
+	if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), roleName, "spec", "roleName"); err != nil {
+		return err
+	}
+	return nil
+}
+
+func setAWSManagedMPScaling(ri *parser.ResourceInfo, minNodeCount, maxNodeCount int64) error {
+	scaling := map[string]any{
+		"minSize": minNodeCount,
+		"maxSize": maxNodeCount,
+	}
+	if err := unstructured.SetNestedMap(ri.Object.UnstructuredContent(), scaling, "spec", "scaling"); err != nil {
+		return err
+	}
+	if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), "default", "metadata", "name"); err != nil {
+		return err
+	}
+	return nil
+}
+
+func setAWSManagedMPRole(ri *parser.ResourceInfo, roleName string) error {
+	if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), roleName, "spec", "roleName"); err != nil {
+		return err
+	}
+	return nil
+}
+
+func setAWSClusterAnnotations(ri *parser.ResourceInfo, managedControlplaneRole, managedMachinepoolRole string) error {
+	if managedControlplaneRole != "" {
+		if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), managedControlplaneRole, "metadata", "annotations", controlplaneRoleAnnotation); err != nil {
+			return err
+		}
+	}
+	if managedMachinepoolRole != "" {
+		if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), managedMachinepoolRole, "metadata", "annotations", machinepoolRoleAnnotation); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+type validationHelper struct {
+	isFound                 map[string]bool
+	managedControlplaneRole string
+	managedMachinepoolRole  string
+	vpcCidr                 string
+	minCount, maxCount      int64
+}
+
+func validation(helper validationHelper) error {
+	if !helper.isFound[awsManagedControlPlaneKind] {
+		if helper.vpcCidr != "" {
+			return errors.New("failed to get AWSManagedControlPlane for cidr update")
+		}
+		if helper.managedControlplaneRole != "" {
+			return errors.New("failed to get AWSManagedControlPlane for role configuration")
+		}
+	}
+	if helper.minCount > helper.maxCount {
+		return errors.New("max node count can't be less than min node count")
+	}
+	if helper.managedMachinepoolRole != "" && !helper.isFound[awsManagedMachinePoolKind] {
+		return errors.New("failed to get AWSManagedMachinePool for role configuration")
+	}
+	if !helper.isFound[clusterKind] {
+		if helper.managedControlplaneRole != "" || helper.managedMachinepoolRole != "" {
+			return errors.New("failed to get Cluster Kind to update annotations")
+		}
+	}
+	return nil
+}
+
 func NewCmdCAPA() *cobra.Command {
-	var vpcCidr string
+	var vpcCidr, managedControlplaneRole, managedMachinepoolRole string
+	var minNodeCount, maxNodeCount int64
+	isFound := make(map[string]bool)
 	cmd := &cobra.Command{
 		Use:               "capa",
 		Short:             "Configure CAPA network config",
@@ -40,23 +136,51 @@ func NewCmdCAPA() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if vpcCidr == "" {
-				_, err = os.Stdout.Write(in)
-				return err
-			}
 
 			var out bytes.Buffer
-			var foundCP bool
 			err = parser.ProcessResources(in, func(ri parser.ResourceInfo) error {
-				if ri.Object.GetKind() == "AWSManagedControlPlane" {
-					foundCP = true
-
-					netcfg := map[string]any{
-						"vpc": map[string]any{
-							"cidrBlock": vpcCidr,
-						},
+				if ri.Object.GetKind() == awsManagedControlPlaneKind {
+					isFound[awsManagedControlPlaneKind] = true
+					if vpcCidr != "" {
+						err := setAWSManagedCPCIDR(&ri, vpcCidr)
+						if err != nil {
+							return err
+						}
 					}
-					if err := unstructured.SetNestedMap(ri.Object.UnstructuredContent(), netcfg, "spec", "network"); err != nil {
+					if managedControlplaneRole != "" {
+						err := setAWSManagedCPRole(&ri, managedControlplaneRole)
+						if err != nil {
+							return err
+						}
+					}
+				}
+
+				if ri.Object.GetKind() == machinePoolKind {
+					isFound[machinePoolKind] = true
+					err := SetMPConfiguration(ri, minNodeCount, maxNodeCount)
+					if err != nil {
+						return err
+					}
+				}
+
+				if ri.Object.GetKind() == awsManagedMachinePoolKind {
+					isFound[awsManagedMachinePoolKind] = true
+					err := setAWSManagedMPScaling(&ri, minNodeCount, maxNodeCount)
+					if err != nil {
+						return err
+					}
+					if managedMachinepoolRole != "" {
+						err = setAWSManagedMPRole(&ri, managedMachinepoolRole)
+						if err != nil {
+							return err
+						}
+					}
+				}
+
+				if ri.Object.GetKind() == clusterKind {
+					isFound[clusterKind] = true
+					err := setAWSClusterAnnotations(&ri, managedControlplaneRole, managedMachinepoolRole)
+					if err != nil {
 						return err
 					}
 				}
@@ -74,8 +198,18 @@ func NewCmdCAPA() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if !foundCP {
-				return errors.New("control plane not found, check apiVersion")
+
+			// configuration operation validation
+			err = validation(validationHelper{
+				isFound:                 isFound,
+				managedControlplaneRole: managedControlplaneRole,
+				managedMachinepoolRole:  managedMachinepoolRole,
+				vpcCidr:                 vpcCidr,
+				minCount:                minNodeCount,
+				maxCount:                maxNodeCount,
+			})
+			if err != nil {
+				return err
 			}
 
 			_, err = os.Stdout.Write(out.Bytes())
@@ -83,5 +217,9 @@ func NewCmdCAPA() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&vpcCidr, "vpc-cidr", "", "CIDR block to be used for vpc")
+	cmd.Flags().StringVar(&managedControlplaneRole, "managedcp-role", "", "Managed ControlPlane role for CAPA")
+	cmd.Flags().StringVar(&managedMachinepoolRole, "managedmp-role", "", "Managed MachinePool role for CAPA")
+	cmd.Flags().Int64Var(&minNodeCount, "min-node-count", 1, "Minimum count of nodes in nodepool")
+	cmd.Flags().Int64Var(&maxNodeCount, "max-node-count", 6, "Maximum count of nodes in nodepool")
 	return cmd
 }
