@@ -23,7 +23,7 @@ import (
 	"kmodules.xyz/client-go/tools/parser"
 )
 
-func SetMPConfiguration(ri parser.ResourceInfo, minSize int64, maxSize int64) error {
+func SetMPConfiguration(ri parser.ResourceInfo, name string, minSize int64, maxSize int64) error {
 	scalingCfg := map[string]any{
 		"cluster.x-k8s.io/cluster-api-autoscaler-node-group-min-size": strconv.FormatInt(minSize, 10),
 		"cluster.x-k8s.io/cluster-api-autoscaler-node-group-max-size": strconv.FormatInt(maxSize, 10),
@@ -32,5 +32,13 @@ func SetMPConfiguration(ri parser.ResourceInfo, minSize int64, maxSize int64) er
 	if err := unstructured.SetNestedMap(ri.Object.UnstructuredContent(), scalingCfg, "metadata", "annotations"); err != nil {
 		return err
 	}
+
+	if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), name, "metadata", "name"); err != nil {
+		return err
+	}
+	if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), name, "spec", "template", "spec", "infrastructureRef", "name"); err != nil {
+		return err
+	}
+
 	return nil
 }

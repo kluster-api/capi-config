@@ -57,7 +57,7 @@ func setAWSManagedCPRole(ri *parser.ResourceInfo, roleName string) error {
 	return nil
 }
 
-func setAWSManagedMPScaling(ri *parser.ResourceInfo, minNodeCount, maxNodeCount int64) error {
+func setAWSManagedMPScaling(ri *parser.ResourceInfo, name string, minNodeCount, maxNodeCount int64) error {
 	scaling := map[string]any{
 		"minSize": minNodeCount,
 		"maxSize": maxNodeCount,
@@ -65,7 +65,7 @@ func setAWSManagedMPScaling(ri *parser.ResourceInfo, minNodeCount, maxNodeCount 
 	if err := unstructured.SetNestedMap(ri.Object.UnstructuredContent(), scaling, "spec", "scaling"); err != nil {
 		return err
 	}
-	if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), "default", "metadata", "name"); err != nil {
+	if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), name, "metadata", "name"); err != nil {
 		return err
 	}
 	return nil
@@ -157,7 +157,7 @@ func NewCmdCAPA() *cobra.Command {
 
 				if ri.Object.GetKind() == machinePoolKind {
 					isFound[machinePoolKind] = true
-					err := SetMPConfiguration(ri, minNodeCount, maxNodeCount)
+					err := SetMPConfiguration(ri, deafultMachinePoolName, minNodeCount, maxNodeCount)
 					if err != nil {
 						return err
 					}
@@ -165,7 +165,7 @@ func NewCmdCAPA() *cobra.Command {
 
 				if ri.Object.GetKind() == awsManagedMachinePoolKind {
 					isFound[awsManagedMachinePoolKind] = true
-					err := setAWSManagedMPScaling(&ri, minNodeCount, maxNodeCount)
+					err := setAWSManagedMPScaling(&ri, deafultMachinePoolName, minNodeCount, maxNodeCount)
 					if err != nil {
 						return err
 					}

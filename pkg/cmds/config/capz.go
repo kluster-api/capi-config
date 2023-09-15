@@ -89,17 +89,21 @@ func NewCmdCAPZ() *cobra.Command {
 
 					var minSize int64
 					var maxSize int64
+					var newName string
 					if mode == "System" {
 						foundSysManagedMP = true
 						minSize = systemMPMinSize
 						maxSize = systemMPMaxSize
+						newName = "sys0"
 
 					} else if mode == "User" {
 						foundUserManagedMP = true
 						minSize = userMPMinSize
 						maxSize = userMPMaxSize
+						newName = deafultMachinePoolName
 					}
-					if err := SetAzureManagedMPConfiguration(ri, mode, minSize, maxSize); err != nil {
+
+					if err := SetAzureManagedMPConfiguration(ri, newName, mode, minSize, maxSize); err != nil {
 						return err
 					}
 
@@ -114,20 +118,25 @@ func NewCmdCAPZ() *cobra.Command {
 						return errors.New("name in MachinePool is missing")
 					}
 					mode := strings.HasSuffix(name, "pool0")
+
+					var newName string
 					var minSize int64
 					var maxSize int64
 					if mode {
 						foundSysMP = true
 						minSize = systemMPMinSize
 						maxSize = systemMPMaxSize
+						newName = "sys0"
 					} else {
 						foundUserMP = true
 						minSize = userMPMinSize
 						maxSize = userMPMaxSize
+						newName = "default"
 					}
-					if err := SetMPConfiguration(ri, minSize, maxSize); err != nil {
+					if err := SetMPConfiguration(ri, newName, minSize, maxSize); err != nil {
 						return err
 					}
+
 				}
 
 				data, err := yaml.Marshal(ri.Object)
@@ -175,7 +184,7 @@ func NewCmdCAPZ() *cobra.Command {
 	return cmd
 }
 
-func SetAzureManagedMPConfiguration(ri parser.ResourceInfo, mode string, minSize int64, maxSize int64) error {
+func SetAzureManagedMPConfiguration(ri parser.ResourceInfo, name string, mode string, minSize int64, maxSize int64) error {
 	if mode == "System" {
 		taint := map[string]any{
 			"key":    "CriticalAddonsOnly",
@@ -196,6 +205,12 @@ func SetAzureManagedMPConfiguration(ri parser.ResourceInfo, mode string, minSize
 		return err
 	}
 
+	if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), name, "metadata", "name"); err != nil {
+		return err
+	}
+	if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), name, "spec", "name"); err != nil {
+		return err
+	}
 	return nil
 }
 
