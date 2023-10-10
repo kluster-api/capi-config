@@ -17,7 +17,7 @@ limitations under the License.
 package cmds
 
 import (
-	"go.bytebuilders.dev/capi-config/pkg/cmds/config"
+	"go.klusters.dev/capi-config/pkg/cmds/config"
 
 	"github.com/spf13/cobra"
 	v "gomodules.xyz/x/version"

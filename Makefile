@@ -14,7 +14,7 @@
 
 SHELL=/bin/bash -o pipefail
 
-GO_PKG   := go.bytebuilders.dev
+GO_PKG   := go.klusters.dev
 REPO     := $(notdir $(shell pwd))
 BIN      := capi-config
 COMPRESS ?= no

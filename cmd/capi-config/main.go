@@ -17,7 +17,7 @@ limitations under the License.
 package main
 
 import (
-	"go.bytebuilders.dev/capi-config/pkg/cmds"
+	"go.klusters.dev/capi-config/pkg/cmds"
 
 	"gomodules.xyz/logs"
 	"k8s.io/klog/v2"
