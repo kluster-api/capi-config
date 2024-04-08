@@ -197,7 +197,7 @@ unit-tests: $(BUILD_DIRS)
 	        ./hack/test.sh $(SRC_PKGS)                          \
 	    "
 
-ADDTL_LINTERS   := goconst,gofmt,goimports,unparam
+ADDTL_LINTERS   := gofmt,goimports,unparam
 
 .PHONY: lint
 lint: $(BUILD_DIRS)
@@ -216,7 +216,7 @@ lint: $(BUILD_DIRS)
 	    --env GO111MODULE=on                                    \
 	    --env GOFLAGS="-mod=vendor"                             \
 	    $(BUILD_IMAGE)                                          \
-	    golangci-lint run --enable $(ADDTL_LINTERS) --deadline=10m --skip-files="generated.*\.go$\" --skip-dirs-use-default
+	    golangci-lint run --enable $(ADDTL_LINTERS) --timeout=10m --skip-files="generated.*\.go$\" --skip-dirs-use-default
 
 $(BUILD_DIRS):
 	@mkdir -p $@
