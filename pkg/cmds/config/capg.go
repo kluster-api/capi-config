@@ -52,12 +52,17 @@ func NewCmdCAPG() *cobra.Command {
 			var foundCP bool
 			var foundMP bool
 			var foundManagedMP bool
+			clusterName := ""
 			err = parser.ProcessResources(in, func(ri parser.ResourceInfo) error {
 				if ri.Object.GetAPIVersion() == infraApiVersion &&
 					ri.Object.GetKind() == "GCPManagedCluster" {
 					foundCP = true
 
 					if err := SetGCPNetworkConfiguration(ri, subnetCidr); err != nil {
+						return err
+					}
+					clusterName, _, err = unstructured.NestedString(ri.Object.UnstructuredContent(), "metadata", "name")
+					if err != nil {
 						return err
 					}
 
@@ -74,6 +79,11 @@ func NewCmdCAPG() *cobra.Command {
 					foundMP = true
 
 					if err := SetMPConfiguration(ri, deafultMachinePoolName, minSize, maxSize); err != nil {
+						return err
+					}
+				} else if ri.Object.GetAPIVersion() == "infrastructure.cluster.x-k8s.io/v1beta1" &&
+					ri.Object.GetKind() == "GCPManagedControlPlane" {
+					if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), clusterName, "spec", "clusterName"); err != nil {
 						return err
 					}
 				}
