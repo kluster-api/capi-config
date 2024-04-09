@@ -31,6 +31,7 @@ import (
 
 func NewCmdCAPG() *cobra.Command {
 	var subnetCidr string
+	var kubernetesVersion string
 	var minSize int64
 	var maxSize int64
 
@@ -58,7 +59,7 @@ func NewCmdCAPG() *cobra.Command {
 					ri.Object.GetKind() == "GCPManagedCluster" {
 					foundCP = true
 
-					if err := SetGCPNetworkConfiguration(ri, subnetCidr); err != nil {
+					if err = SetGCPNetworkConfiguration(ri, subnetCidr); err != nil {
 						return err
 					}
 					clusterName, _, err = unstructured.NestedString(ri.Object.UnstructuredContent(), "metadata", "name")
@@ -70,7 +71,7 @@ func NewCmdCAPG() *cobra.Command {
 					ri.Object.GetKind() == "GCPManagedMachinePool" {
 					foundManagedMP = true
 
-					if err := SetGCPManagedMPConfiguration(ri, deafultMachinePoolName, minSize, maxSize); err != nil {
+					if err = SetGCPManagedMPConfiguration(ri, deafultMachinePoolName, minSize, maxSize); err != nil {
 						return err
 					}
 
@@ -78,12 +79,15 @@ func NewCmdCAPG() *cobra.Command {
 					ri.Object.GetKind() == "MachinePool" {
 					foundMP = true
 
-					if err := SetMPConfiguration(ri, deafultMachinePoolName, minSize, maxSize); err != nil {
+					if err = SetMPConfiguration(ri, deafultMachinePoolName, minSize, maxSize); err != nil {
 						return err
 					}
 				} else if ri.Object.GetAPIVersion() == "infrastructure.cluster.x-k8s.io/v1beta1" &&
 					ri.Object.GetKind() == "GCPManagedControlPlane" {
-					if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), clusterName, "spec", "clusterName"); err != nil {
+					if err = unstructured.SetNestedField(ri.Object.UnstructuredContent(), clusterName, "spec", "clusterName"); err != nil {
+						return err
+					}
+					if err = unstructured.SetNestedField(ri.Object.UnstructuredContent(), kubernetesVersion, "spec", "controlPlaneVersion"); err != nil {
 						return err
 					}
 				}
@@ -115,6 +119,7 @@ func NewCmdCAPG() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&subnetCidr, "subnet-cidr", "", "CIDR block to be used for subnet")
+	cmd.Flags().StringVar(&kubernetesVersion, "kubernetes-version", "", "Kubernetes Version of Control Plane")
 	cmd.Flags().Int64Var(&minSize, "min-count", 3, "Minimum count of nodes in nodepool")
 	cmd.Flags().Int64Var(&maxSize, "max-count", 6, "Maximum count of nodes in nodepool")
 	return cmd
