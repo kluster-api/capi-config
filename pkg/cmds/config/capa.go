@@ -124,7 +124,7 @@ func validation(helper validationHelper) error {
 }
 
 func NewCmdCAPA() *cobra.Command {
-	var vpcCidr, managedControlplaneRole, managedMachinepoolRole string
+	var vpcCidr, managedControlplaneRole, managedMachinepoolRole, clusterName string
 	var minNodeCount, maxNodeCount int64
 	isFound := make(map[string]bool)
 	cmd := &cobra.Command{
@@ -150,6 +150,11 @@ func NewCmdCAPA() *cobra.Command {
 					if managedControlplaneRole != "" {
 						err := setAWSManagedCPRole(&ri, managedControlplaneRole)
 						if err != nil {
+							return err
+						}
+					}
+					if clusterName != "" {
+						if err = unstructured.SetNestedField(ri.Object.UnstructuredContent(), clusterName, "spec", "eksClusterName"); err != nil {
 							return err
 						}
 					}
@@ -216,6 +221,7 @@ func NewCmdCAPA() *cobra.Command {
 			return err
 		},
 	}
+	cmd.Flags().StringVar(&clusterName, "cluster-name", "", "Name of upstream cluster")
 	cmd.Flags().StringVar(&vpcCidr, "vpc-cidr", "", "CIDR block to be used for vpc")
 	cmd.Flags().StringVar(&managedControlplaneRole, "managedcp-role", "", "Managed ControlPlane role for CAPA")
 	cmd.Flags().StringVar(&managedMachinepoolRole, "managedmp-role", "", "Managed MachinePool role for CAPA")
