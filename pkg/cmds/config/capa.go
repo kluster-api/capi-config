@@ -19,6 +19,7 @@ package config
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 
@@ -124,7 +125,6 @@ func validation(helper validationHelper) error {
 }
 
 func NewCmdCAPA() *cobra.Command {
-	var vpcCidr, managedControlplaneRole, managedMachinepoolRole, clusterName string
 	var minNodeCount, maxNodeCount int64
 	isFound := make(map[string]bool)
 	cmd := &cobra.Command{
@@ -136,6 +136,10 @@ func NewCmdCAPA() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			vpcCidr := os.Getenv("VPC_CIDR")
+			clusterName := os.Getenv("CLUSTER_NAME")
+			managedControlplaneRole := os.Getenv("CONTROLPLANE_ROLE")
+			managedMachinepoolRole := fmt.Sprintf("nodes%s-%s-%s", clusterName, os.Getenv("CLUSTER_NAMESPACE"), os.Getenv("SUFFIX"))
 
 			var out bytes.Buffer
 			err = parser.ProcessResources(in, func(ri parser.ResourceInfo) error {
@@ -221,11 +225,7 @@ func NewCmdCAPA() *cobra.Command {
 			return err
 		},
 	}
-	cmd.Flags().StringVar(&clusterName, "cluster-name", "", "Name of upstream cluster")
-	cmd.Flags().StringVar(&vpcCidr, "vpc-cidr", "", "CIDR block to be used for vpc")
-	cmd.Flags().StringVar(&managedControlplaneRole, "managedcp-role", "", "Managed ControlPlane role for CAPA")
-	cmd.Flags().StringVar(&managedMachinepoolRole, "managedmp-role", "", "Managed MachinePool role for CAPA")
-	cmd.Flags().Int64Var(&minNodeCount, "min-node-count", 1, "Minimum count of nodes in nodepool")
+	cmd.Flags().Int64Var(&minNodeCount, "min-node-count", 2, "Minimum count of nodes in nodepool")
 	cmd.Flags().Int64Var(&maxNodeCount, "max-node-count", 6, "Maximum count of nodes in nodepool")
 	return cmd
 }
