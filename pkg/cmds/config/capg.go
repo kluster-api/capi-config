@@ -30,11 +30,8 @@ import (
 )
 
 func NewCmdCAPG() *cobra.Command {
-	var subnetCidr string
-	var kubernetesVersion string
 	var minSize int64
 	var maxSize int64
-	var clusterName string
 
 	cmd := &cobra.Command{
 		Use:               "capg",
@@ -45,10 +42,14 @@ func NewCmdCAPG() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			subnetCidr := os.Getenv("SUBNET_CIDR")
 			if subnetCidr == "" {
 				_, err = os.Stdout.Write(in)
 				return err
 			}
+			clusterName := os.Getenv("CLUSTER_NAME")
+			kubernetesVersion := os.Getenv("KUBERNETES_VERSION")
+			nodeMachineType := os.Getenv("GCP_NODE_MACHINE_TYPE")
 
 			var out bytes.Buffer
 			var foundCP bool
@@ -70,6 +71,11 @@ func NewCmdCAPG() *cobra.Command {
 					if err = SetGCPManagedMPConfiguration(ri, deafultMachinePoolName, minSize, maxSize); err != nil {
 						return err
 					}
+					if nodeMachineType != "" {
+						if err = unstructured.SetNestedField(ri.Object.UnstructuredContent(), nodeMachineType, "spec", "machineType"); err != nil {
+							return err
+						}
+					}
 
 				} else if ri.Object.GetAPIVersion() == clusterApiVersion &&
 					ri.Object.GetKind() == "MachinePool" {
@@ -87,6 +93,9 @@ func NewCmdCAPG() *cobra.Command {
 					}
 					if kubernetesVersion != "" {
 						if err = unstructured.SetNestedField(ri.Object.UnstructuredContent(), kubernetesVersion, "spec", "controlPlaneVersion"); err != nil {
+							return err
+						}
+						if err = unstructured.SetNestedField(ri.Object.UnstructuredContent(), "stable", "spec", "releaseChannel"); err != nil {
 							return err
 						}
 					}
@@ -118,9 +127,6 @@ func NewCmdCAPG() *cobra.Command {
 			return err
 		},
 	}
-	cmd.Flags().StringVar(&clusterName, "cluster-name", "", "Name of upstream cluster")
-	cmd.Flags().StringVar(&subnetCidr, "subnet-cidr", "", "CIDR block to be used for subnet")
-	cmd.Flags().StringVar(&kubernetesVersion, "kubernetes-version", "", "Kubernetes Version of Control Plane")
 	cmd.Flags().Int64Var(&minSize, "min-count", 3, "Minimum count of nodes in nodepool")
 	cmd.Flags().Int64Var(&maxSize, "max-count", 6, "Maximum count of nodes in nodepool")
 	return cmd
