@@ -32,9 +32,6 @@ import (
 
 func NewCmdCAPZ() *cobra.Command {
 	var (
-		vNetCidr   string
-		subnetCidr string
-
 		systemMPMinSize int64
 		systemMPMaxSize int64
 
@@ -50,6 +47,8 @@ func NewCmdCAPZ() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			vNetCidr := os.Getenv("VNET_CIDR")
+			subnetCidr := os.Getenv("SUBNET_CIDR")
 			if vNetCidr == "" && subnetCidr == "" {
 				_, err = os.Stdout.Write(in)
 				return err
@@ -173,8 +172,6 @@ func NewCmdCAPZ() *cobra.Command {
 			return err
 		},
 	}
-	cmd.Flags().StringVar(&vNetCidr, "vnet-cidr", "", "CIDR block to be used for vNET")
-	cmd.Flags().StringVar(&subnetCidr, "subnet-cidr", "", "CIDR block to be used for subnet")
 
 	cmd.Flags().Int64Var(&systemMPMinSize, "system-min-size", 1, "Minimum node count for System Machine Pool")
 	cmd.Flags().Int64Var(&systemMPMaxSize, "system-max-size", 2, "Minimum node count for System Machine Pool")
