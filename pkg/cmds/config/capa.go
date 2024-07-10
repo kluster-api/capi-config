@@ -168,7 +168,6 @@ func NewCmdCAPA() *cobra.Command {
 						if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), managedMachinepoolRole, "spec", "roleName"); err != nil {
 							return err
 						}
-						return nil
 					}
 					if nodeMachineType != "" {
 						if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), nodeMachineType, "spec", "instanceType"); err != nil {
