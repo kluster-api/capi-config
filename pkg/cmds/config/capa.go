@@ -51,13 +51,6 @@ func setAWSManagedCPCIDR(ri *parser.ResourceInfo, vpcCidr string) error {
 	return nil
 }
 
-func setAWSManagedCPRole(ri *parser.ResourceInfo, roleName string) error {
-	if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), roleName, "spec", "roleName"); err != nil {
-		return err
-	}
-	return nil
-}
-
 func setAWSManagedMPScaling(ri *parser.ResourceInfo, name string, minNodeCount, maxNodeCount int64) error {
 	scaling := map[string]any{
 		"minSize": minNodeCount,
@@ -67,13 +60,6 @@ func setAWSManagedMPScaling(ri *parser.ResourceInfo, name string, minNodeCount, 
 		return err
 	}
 	if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), name, "metadata", "name"); err != nil {
-		return err
-	}
-	return nil
-}
-
-func setAWSManagedMPRole(ri *parser.ResourceInfo, roleName string) error {
-	if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), roleName, "spec", "roleName"); err != nil {
 		return err
 	}
 	return nil
@@ -140,6 +126,7 @@ func NewCmdCAPA() *cobra.Command {
 			clusterName := os.Getenv("CLUSTER_NAME")
 			managedControlplaneRole := os.Getenv("CONTROLPLANE_ROLE")
 			managedMachinepoolRole := fmt.Sprintf("nodes%s-%s-%s", clusterName, os.Getenv("CLUSTER_NAMESPACE"), os.Getenv("SUFFIX"))
+			nodeMachineType := os.Getenv("AWS_NODE_MACHINE_TYPE")
 
 			var out bytes.Buffer
 			err = parser.ProcessResources(in, func(ri parser.ResourceInfo) error {
@@ -152,8 +139,7 @@ func NewCmdCAPA() *cobra.Command {
 						}
 					}
 					if managedControlplaneRole != "" {
-						err := setAWSManagedCPRole(&ri, managedControlplaneRole)
-						if err != nil {
+						if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), managedControlplaneRole, "spec", "roleName"); err != nil {
 							return err
 						}
 					}
@@ -179,8 +165,13 @@ func NewCmdCAPA() *cobra.Command {
 						return err
 					}
 					if managedMachinepoolRole != "" {
-						err = setAWSManagedMPRole(&ri, managedMachinepoolRole)
-						if err != nil {
+						if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), managedMachinepoolRole, "spec", "roleName"); err != nil {
+							return err
+						}
+						return nil
+					}
+					if nodeMachineType != "" {
+						if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), nodeMachineType, "spec", "instanceType"); err != nil {
 							return err
 						}
 					}
