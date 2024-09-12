@@ -125,6 +125,7 @@ func NewCmdCAPA() *cobra.Command {
 			vpcCidr := os.Getenv("VPC_CIDR")
 			clusterName := os.Getenv("CLUSTER_NAME")
 			managedControlplaneRole := os.Getenv("CONTROLPLANE_ROLE")
+			ebsCSIDriverVersion := os.Getenv("EBS_CSI_DRIVER_VERSION")
 			managedMachinepoolRole := fmt.Sprintf("nodes%s-%s-%s", clusterName, os.Getenv("CLUSTER_NAMESPACE"), os.Getenv("SUFFIX"))
 			nodeMachineType := os.Getenv("AWS_NODE_MACHINE_TYPE")
 
@@ -147,6 +148,16 @@ func NewCmdCAPA() *cobra.Command {
 						if err = unstructured.SetNestedField(ri.Object.UnstructuredContent(), clusterName, "spec", "eksClusterName"); err != nil {
 							return err
 						}
+					}
+					addons := []interface{}{
+						map[string]any{
+							"name":               "aws-ebs-csi-driver",
+							"version":            ebsCSIDriverVersion,
+							"conflictResolution": "overwrite",
+						},
+					}
+					if err := unstructured.SetNestedSlice(ri.Object.UnstructuredContent(), addons, "spec", "addons"); err != nil {
+						return err
 					}
 				}
 
