@@ -47,18 +47,6 @@ func NewCmdCAPZ() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			vNetCidr := os.Getenv("VNET_CIDR")
-			subnetCidr := os.Getenv("SUBNET_CIDR")
-			if vNetCidr == "" && subnetCidr == "" {
-				_, err = os.Stdout.Write(in)
-				return err
-			}
-			if vNetCidr == "" {
-				return errors.New("missing --vnet-cidr")
-			}
-			if subnetCidr == "" {
-				return errors.New("missing --subnet-cidr")
-			}
 
 			var out bytes.Buffer
 			var foundCP bool
@@ -71,7 +59,7 @@ func NewCmdCAPZ() *cobra.Command {
 					ri.Object.GetKind() == "AzureManagedControlPlane" {
 					foundCP = true
 
-					if err := SetAzureNetworkConfiguration(ri, vNetCidr, subnetCidr); err != nil {
+					if err := SetAzureNetworkConfiguration(ri); err != nil {
 						return err
 					}
 
@@ -136,6 +124,21 @@ func NewCmdCAPZ() *cobra.Command {
 						return err
 					}
 
+				} else if ri.Object.GetAPIVersion() == infraApiVersion &&
+					ri.Object.GetKind() == "AzureClusterIdentity" {
+
+					clientSecretName := os.Getenv("AZURE_CLUSTER_IDENTITY_SECRET_NAME")
+					clientSecretNamespace := os.Getenv("AZURE_CLUSTER_IDENTITY_SECRET_NAMESPACE")
+
+					if clientSecretNamespace != "" && clientSecretName != "" {
+						clientSecret := map[string]any{
+							"name":      clientSecretName,
+							"namespace": clientSecretNamespace,
+						}
+						if err := unstructured.SetNestedMap(ri.Object.UnstructuredContent(), clientSecret, "spec", "clientSecret"); err != nil {
+							return err
+						}
+					}
 				}
 
 				data, err := yaml.Marshal(ri.Object)
@@ -211,13 +214,18 @@ func SetAzureManagedMPConfiguration(ri parser.ResourceInfo, name string, mode st
 	return nil
 }
 
-func SetAzureNetworkConfiguration(ri parser.ResourceInfo, vNetCidr string, subnetCidr string) error {
+func SetAzureNetworkConfiguration(ri parser.ResourceInfo) error {
 	resourceGroupName, ok, err := unstructured.NestedString(ri.Object.UnstructuredContent(), "spec", "resourceGroupName")
 	if err != nil {
 		return err
 	}
 	if !ok {
 		return errors.New("resourceGroupName is missing")
+	}
+	vNetCidr := os.Getenv("VNET_CIDR")
+	subnetCidr := os.Getenv("SUBNET_CIDR")
+	if vNetCidr == "" || subnetCidr == "" {
+		return nil
 	}
 
 	netcfg := map[string]any{
