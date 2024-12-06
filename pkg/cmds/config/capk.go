@@ -38,12 +38,9 @@ func NewCmdCAPK() *cobra.Command {
 			}
 
 			var out bytes.Buffer
-			//	var foundCP bool
 
 			err = parser.ProcessResources(in, func(ri parser.ResourceInfo) error {
 				if ri.Object.GetKind() == "KubevirtMachineTemplate" {
-					//foundCP = true
-
 					if err := setBootstrapCheckStrategy(ri); err != nil {
 						return err
 					}
