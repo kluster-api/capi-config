@@ -41,8 +41,14 @@ func NewCmdCAPK() *cobra.Command {
 			var out bytes.Buffer
 
 			err = parser.ProcessResources(in, func(ri parser.ResourceInfo) error {
-				if ri.Object.GetKind() == "KubevirtMachineTemplate" {
-					if err := setBootstrapCheckStrategy(ri); err != nil {
+				if ri.Object.GetAPIVersion() == "infrastructure.cluster.x-k8s.io/v1alpha1" &&
+					ri.Object.GetKind() == "KubevirtCluster" {
+					if err := SetControlPlaneServiceTemplate(ri); err != nil {
+						return err
+					}
+				} else if ri.Object.GetAPIVersion() == "infrastructure.cluster.x-k8s.io/v1alpha1" &&
+					ri.Object.GetKind() == "KubevirtMachineTemplate" {
+					if err := SetBootstrapCheckStrategy(ri); err != nil {
 						return err
 					}
 				}
@@ -69,8 +75,19 @@ func NewCmdCAPK() *cobra.Command {
 	return cmd
 }
 
-func setBootstrapCheckStrategy(ri parser.ResourceInfo) error {
+func SetBootstrapCheckStrategy(ri parser.ResourceInfo) error {
 	if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), "none", "spec", "template", "spec", "virtualMachineBootstrapCheck", "checkStrategy"); err != nil {
+		return err
+	}
+	return nil
+}
+
+func SetControlPlaneServiceTemplate(ri parser.ResourceInfo) error {
+	if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), "0.0.0.0", "spec", "controlPlaneServiceTemplate", "metadata", "annotations", "kube-vip.io/loadbalancerIPs"); err != nil {
+		return err
+	}
+
+	if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), "LoadBalancer", "spec", "controlPlaneServiceTemplate", "spec", "type"); err != nil {
 		return err
 	}
 	return nil
