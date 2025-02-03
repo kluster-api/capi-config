@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -43,13 +44,24 @@ func NewCmdCAPK() *cobra.Command {
 			err = parser.ProcessResources(in, func(ri parser.ResourceInfo) error {
 				if ri.Object.GetAPIVersion() == "infrastructure.cluster.x-k8s.io/v1alpha1" &&
 					ri.Object.GetKind() == "KubevirtCluster" {
-					if err := SetControlPlaneServiceTemplate(ri); err != nil {
+					if err := setControlPlaneServiceTemplate(ri); err != nil {
 						return err
 					}
 				} else if ri.Object.GetAPIVersion() == "infrastructure.cluster.x-k8s.io/v1alpha1" &&
 					ri.Object.GetKind() == "KubevirtMachineTemplate" {
-					if err := SetBootstrapCheckStrategy(ri); err != nil {
+
+					if err := setBootstrapCheckStrategy(ri); err != nil {
 						return err
+					}
+
+					if strings.HasSuffix(ri.Object.GetName(), "control-plane") {
+						if err := setControlPlaneCpuMemory(ri); err != nil {
+							return err
+						}
+					} else {
+						if err := setWorkerMachineCpuMemory(ri); err != nil {
+							return err
+						}
 					}
 				}
 
@@ -75,19 +87,75 @@ func NewCmdCAPK() *cobra.Command {
 	return cmd
 }
 
-func SetBootstrapCheckStrategy(ri parser.ResourceInfo) error {
+func setBootstrapCheckStrategy(ri parser.ResourceInfo) error {
 	if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), "none", "spec", "template", "spec", "virtualMachineBootstrapCheck", "checkStrategy"); err != nil {
 		return err
 	}
 	return nil
 }
 
-func SetControlPlaneServiceTemplate(ri parser.ResourceInfo) error {
+func setControlPlaneServiceTemplate(ri parser.ResourceInfo) error {
 	if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), "0.0.0.0", "spec", "controlPlaneServiceTemplate", "metadata", "annotations", "kube-vip.io/loadbalancerIPs"); err != nil {
 		return err
 	}
 
+	if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), "${CLUSTER_NAME}", "spec", "controlPlaneServiceTemplate", "metadata", "generateName"); err != nil {
+		return err
+	}
+
 	if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), "LoadBalancer", "spec", "controlPlaneServiceTemplate", "spec", "type"); err != nil {
+		return err
+	}
+	return nil
+}
+
+func setControlPlaneCpuMemory(ri parser.ResourceInfo) error {
+	cpu := map[string]any{
+		"cores":   "${CONTROL_PLANE_MACHINE_CPU}",
+		"sockets": "${SOCKETS}",
+		"threads": "${THREADS}",
+	}
+	if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), cpu, "spec", "template", "spec", "virtualMachineTemplate", "spec", "template", "spec", "domain", "cpu"); err != nil {
+		return err
+	}
+	unstructured.RemoveNestedField(ri.Object.UnstructuredContent(), "spec", "template", "spec", "virtualMachineTemplate", "spec", "template", "spec", "domain", "memory")
+
+	resources := map[string]any{
+		"cpu":    "${CONTROL_PLANE_MACHINE_CPU}",
+		"memory": "${CONTROL_PLANE_MACHINE_MEMORY}",
+	}
+
+	if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), resources, "spec", "template", "spec", "virtualMachineTemplate", "spec", "template", "spec", "domain", "resources", "limits"); err != nil {
+		return err
+	}
+
+	if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), resources, "spec", "template", "spec", "virtualMachineTemplate", "spec", "template", "spec", "domain", "resources", "requests"); err != nil {
+		return err
+	}
+	return nil
+}
+
+func setWorkerMachineCpuMemory(ri parser.ResourceInfo) error {
+	cpu := map[string]any{
+		"cores":   "${WORKER_MACHINE_CPU}",
+		"sockets": "${SOCKETS}",
+		"threads": "${THREADS}",
+	}
+	if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), cpu, "spec", "template", "spec", "virtualMachineTemplate", "spec", "template", "spec", "domain", "cpu"); err != nil {
+		return err
+	}
+	unstructured.RemoveNestedField(ri.Object.UnstructuredContent(), "spec", "template", "spec", "virtualMachineTemplate", "spec", "template", "spec", "domain", "memory")
+
+	resources := map[string]any{
+		"cpu":    "${WORKER_MACHINE_CPU}",
+		"memory": "${WORKER_MACHINE_MEMORY}",
+	}
+
+	if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), resources, "spec", "template", "spec", "virtualMachineTemplate", "spec", "template", "spec", "domain", "resources", "limits"); err != nil {
+		return err
+	}
+
+	if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), resources, "spec", "template", "spec", "virtualMachineTemplate", "spec", "template", "spec", "domain", "resources", "requests"); err != nil {
 		return err
 	}
 	return nil
