@@ -44,22 +44,22 @@ func NewCmdCAPK() *cobra.Command {
 			err = parser.ProcessResources(in, func(ri parser.ResourceInfo) error {
 				if ri.Object.GetAPIVersion() == "infrastructure.cluster.x-k8s.io/v1alpha1" &&
 					ri.Object.GetKind() == "KubevirtCluster" {
-					if err := SetControlPlaneServiceTemplate(ri); err != nil {
+					if err := setControlPlaneServiceTemplate(ri); err != nil {
 						return err
 					}
 				} else if ri.Object.GetAPIVersion() == "infrastructure.cluster.x-k8s.io/v1alpha1" &&
 					ri.Object.GetKind() == "KubevirtMachineTemplate" {
 
-					if err := SetBootstrapCheckStrategy(ri); err != nil {
+					if err := setBootstrapCheckStrategy(ri); err != nil {
 						return err
 					}
 
 					if strings.HasSuffix(ri.Object.GetName(), "control-plane") {
-						if err := SetControlPlaneCpuMemory(ri); err != nil {
+						if err := setControlPlaneCpuMemory(ri); err != nil {
 							return err
 						}
 					} else {
-						if err := WorkerMachineCpuMemory(ri); err != nil {
+						if err := setWorkerMachineCpuMemory(ri); err != nil {
 							return err
 						}
 					}
@@ -87,14 +87,14 @@ func NewCmdCAPK() *cobra.Command {
 	return cmd
 }
 
-func SetBootstrapCheckStrategy(ri parser.ResourceInfo) error {
+func setBootstrapCheckStrategy(ri parser.ResourceInfo) error {
 	if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), "none", "spec", "template", "spec", "virtualMachineBootstrapCheck", "checkStrategy"); err != nil {
 		return err
 	}
 	return nil
 }
 
-func SetControlPlaneServiceTemplate(ri parser.ResourceInfo) error {
+func setControlPlaneServiceTemplate(ri parser.ResourceInfo) error {
 	if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), "0.0.0.0", "spec", "controlPlaneServiceTemplate", "metadata", "annotations", "kube-vip.io/loadbalancerIPs"); err != nil {
 		return err
 	}
@@ -109,7 +109,7 @@ func SetControlPlaneServiceTemplate(ri parser.ResourceInfo) error {
 	return nil
 }
 
-func SetControlPlaneCpuMemory(ri parser.ResourceInfo) error {
+func setControlPlaneCpuMemory(ri parser.ResourceInfo) error {
 	cpu := map[string]any{
 		"cores":   "${CONTROL_PLANE_MACHINE_CPU}",
 		"sockets": "${SOCKETS}",
@@ -135,7 +135,7 @@ func SetControlPlaneCpuMemory(ri parser.ResourceInfo) error {
 	return nil
 }
 
-func WorkerMachineCpuMemory(ri parser.ResourceInfo) error {
+func setWorkerMachineCpuMemory(ri parser.ResourceInfo) error {
 	cpu := map[string]any{
 		"cores":   "${WORKER_MACHINE_CPU}",
 		"sockets": "${SOCKETS}",
