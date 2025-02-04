@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -27,6 +28,11 @@ import (
 	"kmodules.xyz/client-go/tools/parser"
 	"sigs.k8s.io/yaml"
 )
+
+type machineSpecs struct {
+	cpu, socket, threads int64
+	memory               string
+}
 
 func NewCmdCAPK() *cobra.Command {
 	cmd := &cobra.Command{
@@ -40,6 +46,16 @@ func NewCmdCAPK() *cobra.Command {
 			}
 
 			var out bytes.Buffer
+			cpCPU, err := strconv.ParseInt(os.Getenv("CONTROL_PLANE_MACHINE_CPU"), 10, 64)
+			if err != nil {
+				return err
+			}
+			cpMemory := os.Getenv("CONTROL_PLANE_MACHINE_MEMORY") + "Gi"
+			wmCPU, err := strconv.ParseInt(os.Getenv("WORKER_MACHINE_CPU"), 10, 64)
+			if err != nil {
+				return err
+			}
+			wmMemory := os.Getenv("WORKER_MACHINE_MEMORY") + "Gi"
 
 			err = parser.ProcessResources(in, func(ri parser.ResourceInfo) error {
 				if ri.Object.GetAPIVersion() == "infrastructure.cluster.x-k8s.io/v1alpha1" &&
@@ -55,11 +71,21 @@ func NewCmdCAPK() *cobra.Command {
 					}
 
 					if strings.HasSuffix(ri.Object.GetName(), "control-plane") {
-						if err := setControlPlaneCpuMemory(ri); err != nil {
+						if err := setControlPlaneCpuMemory(ri, &machineSpecs{
+							cpu:     cpCPU,
+							memory:  cpMemory,
+							socket:  1,
+							threads: 1,
+						}); err != nil {
 							return err
 						}
 					} else {
-						if err := setWorkerMachineCpuMemory(ri); err != nil {
+						if err := setWorkerMachineCpuMemory(ri, &machineSpecs{
+							cpu:     wmCPU,
+							memory:  wmMemory,
+							socket:  1,
+							threads: 1,
+						}); err != nil {
 							return err
 						}
 					}
@@ -99,30 +125,27 @@ func setControlPlaneServiceTemplate(ri parser.ResourceInfo) error {
 		return err
 	}
 
-	if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), "${CLUSTER_NAME}", "spec", "controlPlaneServiceTemplate", "metadata", "generateName"); err != nil {
-		return err
-	}
-
 	if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), "LoadBalancer", "spec", "controlPlaneServiceTemplate", "spec", "type"); err != nil {
 		return err
 	}
 	return nil
 }
 
-func setControlPlaneCpuMemory(ri parser.ResourceInfo) error {
+func setControlPlaneCpuMemory(ri parser.ResourceInfo, specs *machineSpecs) error {
 	cpu := map[string]any{
-		"cores":   "${CONTROL_PLANE_MACHINE_CPU}",
-		"sockets": "${SOCKETS}",
-		"threads": "${THREADS}",
+		"cores":   specs.cpu,
+		"sockets": specs.socket,
+		"threads": specs.threads,
 	}
 	if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), cpu, "spec", "template", "spec", "virtualMachineTemplate", "spec", "template", "spec", "domain", "cpu"); err != nil {
 		return err
 	}
+
 	unstructured.RemoveNestedField(ri.Object.UnstructuredContent(), "spec", "template", "spec", "virtualMachineTemplate", "spec", "template", "spec", "domain", "memory")
 
 	resources := map[string]any{
-		"cpu":    "${CONTROL_PLANE_MACHINE_CPU}",
-		"memory": "${CONTROL_PLANE_MACHINE_MEMORY}",
+		"cpu":    specs.cpu,
+		"memory": specs.memory,
 	}
 
 	if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), resources, "spec", "template", "spec", "virtualMachineTemplate", "spec", "template", "spec", "domain", "resources", "limits"); err != nil {
@@ -135,11 +158,11 @@ func setControlPlaneCpuMemory(ri parser.ResourceInfo) error {
 	return nil
 }
 
-func setWorkerMachineCpuMemory(ri parser.ResourceInfo) error {
+func setWorkerMachineCpuMemory(ri parser.ResourceInfo, specs *machineSpecs) error {
 	cpu := map[string]any{
-		"cores":   "${WORKER_MACHINE_CPU}",
-		"sockets": "${SOCKETS}",
-		"threads": "${THREADS}",
+		"cores":   specs.cpu,
+		"sockets": specs.socket,
+		"threads": specs.threads,
 	}
 	if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), cpu, "spec", "template", "spec", "virtualMachineTemplate", "spec", "template", "spec", "domain", "cpu"); err != nil {
 		return err
@@ -147,8 +170,8 @@ func setWorkerMachineCpuMemory(ri parser.ResourceInfo) error {
 	unstructured.RemoveNestedField(ri.Object.UnstructuredContent(), "spec", "template", "spec", "virtualMachineTemplate", "spec", "template", "spec", "domain", "memory")
 
 	resources := map[string]any{
-		"cpu":    "${WORKER_MACHINE_CPU}",
-		"memory": "${WORKER_MACHINE_MEMORY}",
+		"cpu":    specs.cpu,
+		"memory": specs.memory,
 	}
 
 	if err := unstructured.SetNestedField(ri.Object.UnstructuredContent(), resources, "spec", "template", "spec", "virtualMachineTemplate", "spec", "template", "spec", "domain", "resources", "limits"); err != nil {
