@@ -1,8 +1,8 @@
 module go.klusters.dev/capi-config
 
-go 1.22.0
+go 1.23.0
 
-toolchain go1.22.2
+toolchain go1.24.2
 
 require (
 	github.com/spf13/cobra v1.8.0
@@ -25,8 +25,8 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
-	golang.org/x/net v0.23.0 // indirect
-	golang.org/x/text v0.14.0 // indirect
+	golang.org/x/net v0.38.0 // indirect
+	golang.org/x/text v0.23.0 // indirect
 	gomodules.xyz/clock v0.0.0-20200817085942-06523dba733f // indirect
 	gomodules.xyz/flags v0.1.3 // indirect
 	gomodules.xyz/sets v0.2.1 // indirect
