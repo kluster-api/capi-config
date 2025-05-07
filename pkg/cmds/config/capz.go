@@ -179,7 +179,7 @@ func NewCmdCAPZ() *cobra.Command {
 	cmd.Flags().Int64Var(&systemMPMinSize, "system-min-size", 1, "Minimum node count for System Machine Pool")
 	cmd.Flags().Int64Var(&systemMPMaxSize, "system-max-size", 2, "Minimum node count for System Machine Pool")
 
-	cmd.Flags().Int64Var(&userMPMinSize, "user-min-size", 2, "Minimum node count for User Machine Pool")
+	cmd.Flags().Int64Var(&userMPMinSize, "user-min-size", 1, "Minimum node count for User Machine Pool")
 	cmd.Flags().Int64Var(&userMPMaxSize, "user-max-size", 5, "Minimum node count for User Machine Pool")
 	return cmd
 }
