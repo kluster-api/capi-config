@@ -226,7 +226,7 @@ func NewCmdCAPA() *cobra.Command {
 			return err
 		},
 	}
-	cmd.Flags().Int64Var(&minNodeCount, "min-node-count", 2, "Minimum count of nodes in nodepool")
+	cmd.Flags().Int64Var(&minNodeCount, "min-node-count", 1, "Minimum count of nodes in nodepool")
 	cmd.Flags().Int64Var(&maxNodeCount, "max-node-count", 6, "Maximum count of nodes in nodepool")
 	return cmd
 }
