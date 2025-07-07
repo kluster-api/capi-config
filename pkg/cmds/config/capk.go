@@ -46,6 +46,8 @@ func NewCmdCAPK() *cobra.Command {
 			}
 
 			var out bytes.Buffer
+			vmImage := os.Getenv("NODE_VM_IMAGE_TEMPLATE")
+			clusterName := os.Getenv("CLUSTER_NAME")
 			cpCPU, err := strconv.ParseInt(os.Getenv("CONTROL_PLANE_MACHINE_CPU"), 10, 64)
 			if err != nil {
 				return err
@@ -70,6 +72,14 @@ func NewCmdCAPK() *cobra.Command {
 						return err
 					}
 
+					if err := addInterfaces(ri); err != nil {
+						return err
+					}
+
+					if err := addNetworks(ri); err != nil {
+						return err
+					}
+
 					if strings.HasSuffix(ri.Object.GetName(), "control-plane") {
 						if err := setControlPlaneCpuMemory(ri, &machineSpecs{
 							cpu:     cpCPU,
@@ -86,6 +96,18 @@ func NewCmdCAPK() *cobra.Command {
 							socket:  1,
 							threads: 1,
 						}); err != nil {
+							return err
+						}
+
+						if err := replaceVolumes(ri, clusterName); err != nil {
+							return err
+						}
+
+						if err := addDataVolumeTemplates(ri, clusterName, vmImage); err != nil {
+							return err
+						}
+
+						if err := replaceDisks(ri); err != nil {
 							return err
 						}
 					}
@@ -111,6 +133,118 @@ func NewCmdCAPK() *cobra.Command {
 	}
 
 	return cmd
+}
+
+func addInterfaces(ri parser.ResourceInfo) error {
+	interfaces := []interface{}{
+		map[string]interface{}{
+			"bridge": map[string]interface{}{},
+			"model":  "virtio",
+			"name":   "default",
+		},
+		map[string]interface{}{
+			"bridge": map[string]interface{}{},
+			"model":  "virtio",
+			"name":   "secondary",
+		},
+	}
+
+	if err := unstructured.SetNestedSlice(ri.Object.UnstructuredContent(), interfaces, "spec", "template", "spec", "virtualMachineTemplate", "spec",
+		"template", "spec", "domain", "devices", "interfaces"); err != nil {
+		return err
+	}
+	return nil
+}
+
+func addNetworks(ri parser.ResourceInfo) error {
+	networks := []interface{}{
+		map[string]interface{}{
+			"pod":  map[string]interface{}{},
+			"name": "default",
+		},
+		map[string]interface{}{
+			"multus": map[string]interface{}{
+				"networkName": "default/vmnet",
+			},
+			"name": "secondary",
+		},
+	}
+
+	if err := unstructured.SetNestedSlice(ri.Object.UnstructuredContent(), networks, "spec", "template", "spec", "virtualMachineTemplate", "spec",
+		"template", "spec", "networks"); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func addDataVolumeTemplates(ri parser.ResourceInfo, clusterName string, vmImage string) error {
+	dataVolumeTemplates := []interface{}{
+		map[string]interface{}{
+			"metadata": map[string]interface{}{
+				"name": clusterName + "-md-0-boot-volume",
+			},
+			"spec": map[string]interface{}{
+				"pvc": map[string]interface{}{
+					"accessModes": []interface{}{"ReadWriteOnce"},
+					"resources": map[string]interface{}{
+						"requests": map[string]interface{}{
+							"storage": "50Gi",
+						},
+					},
+					"storageClassName": "hvl",
+				},
+				"source": map[string]interface{}{
+					"registry": map[string]interface{}{
+						"url": "docker://" + vmImage,
+					},
+				},
+			},
+		},
+	}
+
+	if err := unstructured.SetNestedSlice(ri.Object.UnstructuredContent(), dataVolumeTemplates, "spec", "template", "spec",
+		"virtualMachineTemplate", "spec", "dataVolumeTemplates"); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func replaceDisks(ri parser.ResourceInfo) error {
+	disks := []interface{}{
+		map[string]interface{}{
+			"disk": map[string]interface{}{
+				"bus": "virtio",
+			},
+			"name": "dv-volume",
+		},
+	}
+
+	if err := unstructured.SetNestedSlice(ri.Object.UnstructuredContent(), disks, "spec", "template", "spec", "virtualMachineTemplate", "spec",
+		"template", "spec", "domain", "devices", "disks"); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func replaceVolumes(ri parser.ResourceInfo, clusterName string) error {
+	volumes := []interface{}{
+		map[string]interface{}{
+			"dataVolume": map[string]interface{}{
+				"name": clusterName + "-md-0-boot-volume",
+			},
+			"name": "dv-volume",
+		},
+	}
+
+	if err := unstructured.SetNestedSlice(ri.Object.UnstructuredContent(), volumes, "spec", "template", "spec", "virtualMachineTemplate", "spec",
+		"template", "spec", "volumes"); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func setBootstrapCheckStrategy(ri parser.ResourceInfo) error {
