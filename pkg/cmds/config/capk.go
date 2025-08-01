@@ -189,7 +189,7 @@ func addDataVolumeTemplates(ri parser.ResourceInfo, clusterName string, vmImage 
 					"accessModes": []interface{}{"ReadWriteOnce"},
 					"resources": map[string]interface{}{
 						"requests": map[string]interface{}{
-							"storage": "50Gi",
+							"storage": "20Gi",
 						},
 					},
 					"storageClassName": "hvl",
