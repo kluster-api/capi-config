@@ -24,7 +24,6 @@ import (
 
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	_ "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"kmodules.xyz/client-go/tools/parser"
 	"sigs.k8s.io/yaml"
 )
@@ -164,7 +163,7 @@ func SetGCPNetworkConfiguration(ri parser.ResourceInfo, subnetCidr string) error
 		return errors.New("region name is missing")
 	}
 
-	subnets := []interface{}{
+	subnets := []any{
 		map[string]any{
 			"name":      networkName + "-subnet",
 			"region":    region,

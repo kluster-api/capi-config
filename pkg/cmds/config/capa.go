@@ -25,7 +25,6 @@ import (
 
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	_ "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"kmodules.xyz/client-go/tools/parser"
 	"sigs.k8s.io/yaml"
 )
@@ -149,7 +148,7 @@ func NewCmdCAPA() *cobra.Command {
 							return err
 						}
 					}
-					addons := []interface{}{
+					addons := []any{
 						map[string]any{
 							"name":               "aws-ebs-csi-driver",
 							"version":            ebsCSIDriverVersion,

@@ -25,7 +25,6 @@ import (
 
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	_ "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"kmodules.xyz/client-go/tools/parser"
 	"sigs.k8s.io/yaml"
 )
@@ -77,13 +76,14 @@ func NewCmdCAPZ() *cobra.Command {
 					var minSize int64
 					var maxSize int64
 					var newName string
-					if mode == "System" {
+					switch mode {
+					case "System":
 						foundSysManagedMP = true
 						minSize = systemMPMinSize
 						maxSize = systemMPMaxSize
 						newName = "sys0"
 
-					} else if mode == "User" {
+					case "User":
 						foundUserManagedMP = true
 						minSize = userMPMinSize
 						maxSize = userMPMaxSize
@@ -191,7 +191,7 @@ func SetAzureManagedMPConfiguration(ri parser.ResourceInfo, name string, mode st
 			"value":  "true",
 			"effect": "NoSchedule",
 		}
-		taints := []interface{}{taint}
+		taints := []any{taint}
 		if err := unstructured.SetNestedSlice(ri.Object.UnstructuredContent(), taints, "spec", "taints"); err != nil {
 			return err
 		}

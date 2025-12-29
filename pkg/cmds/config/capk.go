@@ -136,14 +136,14 @@ func NewCmdCAPK() *cobra.Command {
 }
 
 func addInterfaces(ri parser.ResourceInfo) error {
-	interfaces := []interface{}{
-		map[string]interface{}{
-			"bridge": map[string]interface{}{},
+	interfaces := []any{
+		map[string]any{
+			"bridge": map[string]any{},
 			"model":  "virtio",
 			"name":   "default",
 		},
-		map[string]interface{}{
-			"bridge": map[string]interface{}{},
+		map[string]any{
+			"bridge": map[string]any{},
 			"model":  "virtio",
 			"name":   "secondary",
 		},
@@ -157,13 +157,13 @@ func addInterfaces(ri parser.ResourceInfo) error {
 }
 
 func addNetworks(ri parser.ResourceInfo) error {
-	networks := []interface{}{
-		map[string]interface{}{
-			"pod":  map[string]interface{}{},
+	networks := []any{
+		map[string]any{
+			"pod":  map[string]any{},
 			"name": "default",
 		},
-		map[string]interface{}{
-			"multus": map[string]interface{}{
+		map[string]any{
+			"multus": map[string]any{
 				"networkName": "default/vmnet",
 			},
 			"name": "secondary",
@@ -179,23 +179,23 @@ func addNetworks(ri parser.ResourceInfo) error {
 }
 
 func addDataVolumeTemplates(ri parser.ResourceInfo, clusterName string, vmImage string) error {
-	dataVolumeTemplates := []interface{}{
-		map[string]interface{}{
-			"metadata": map[string]interface{}{
+	dataVolumeTemplates := []any{
+		map[string]any{
+			"metadata": map[string]any{
 				"name": clusterName + "-md-0-boot-volume",
 			},
-			"spec": map[string]interface{}{
-				"pvc": map[string]interface{}{
-					"accessModes": []interface{}{"ReadWriteOnce"},
-					"resources": map[string]interface{}{
-						"requests": map[string]interface{}{
+			"spec": map[string]any{
+				"pvc": map[string]any{
+					"accessModes": []any{"ReadWriteOnce"},
+					"resources": map[string]any{
+						"requests": map[string]any{
 							"storage": "20Gi",
 						},
 					},
 					"storageClassName": "hvl",
 				},
-				"source": map[string]interface{}{
-					"registry": map[string]interface{}{
+				"source": map[string]any{
+					"registry": map[string]any{
 						"url": "docker://" + vmImage,
 					},
 				},
@@ -212,9 +212,9 @@ func addDataVolumeTemplates(ri parser.ResourceInfo, clusterName string, vmImage 
 }
 
 func replaceDisks(ri parser.ResourceInfo) error {
-	disks := []interface{}{
-		map[string]interface{}{
-			"disk": map[string]interface{}{
+	disks := []any{
+		map[string]any{
+			"disk": map[string]any{
 				"bus": "virtio",
 			},
 			"name": "dv-volume",
@@ -230,9 +230,9 @@ func replaceDisks(ri parser.ResourceInfo) error {
 }
 
 func replaceVolumes(ri parser.ResourceInfo, clusterName string) error {
-	volumes := []interface{}{
-		map[string]interface{}{
-			"dataVolume": map[string]interface{}{
+	volumes := []any{
+		map[string]any{
+			"dataVolume": map[string]any{
 				"name": clusterName + "-md-0-boot-volume",
 			},
 			"name": "dv-volume",
